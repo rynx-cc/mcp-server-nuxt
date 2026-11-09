@@ -1,6 +1,5 @@
-# mcp-server-nuxt
-
-<div align="center">
+<div align="center"> 
+<h1>mcp-server-nuxt</h1>
 
 A production-ready Model Context Protocol server that gives LLMs Nuxt's resolved state.
 
