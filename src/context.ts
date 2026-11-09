@@ -62,13 +62,16 @@ export class NuxtProjectContext {
   async snapshot(): Promise<ProjectSnapshot> {
     if (this.snapshotCache) return this.snapshotCache;
 
-    const [routes, components, composables, serverRoutes, config, nuxtVersion, directories, built] =
+    const config = await this.config();
+    const layers = await this.layers();
+    const extraLayers = layers.slice(1).map((l) => ({ cwd: l.cwd, name: l.name }));
+
+    const [routes, components, composables, serverRoutes, nuxtVersion, directories, built] =
       await Promise.all([
-        listPageRoutes(this.root),
-        listComponents(this.root),
-        listComposables(this.root),
+        listPageRoutes(this.root, extraLayers),
+        listComponents(this.root, extraLayers),
+        listComposables(this.root, extraLayers),
         listServerRoutes(this.root),
-        this.config(),
         getNuxtVersion(this.root),
         listDirectories(this.root),
         isBuilt(this.root),
@@ -96,7 +99,7 @@ export class NuxtProjectContext {
       },
       directories,
       modules: modules.map((m) => m.name),
-      layers: [],
+      layers: layers.map((l) => l.name),
       built,
     };
 

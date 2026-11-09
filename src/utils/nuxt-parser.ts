@@ -168,20 +168,18 @@ export function extractPageMeta(content: string): {
   return { meta, middleware, layout };
 }
 
-export async function listPageRoutes(root: string): Promise<RouteInfo[]> {
-  const pagesDir = path.join(root, 'pages');
-  const files = await findFiles(root, ['pages/**/*.vue']);
+async function listRoutesIn(scanRoot: string, layer?: string): Promise<RouteInfo[]> {
+  const files = await findFiles(scanRoot, ['pages/**/*.vue']);
   const byPath = new Map<string, string>();
 
   for (const file of files) {
-    const rel = relativePath(root, file).replace(/^pages\//, '');
-    const { path: routePath } = fileToRoutePath(rel);
-    byPath.set(routePath, file);
+    const rel = relativePath(scanRoot, file).replace(/^pages\//, '');
+    byPath.set(fileToRoutePath(rel).path, file);
   }
 
   const routes: RouteInfo[] = [];
   for (const file of files) {
-    const rel = relativePath(root, file).replace(/^pages\//, '');
+    const rel = relativePath(scanRoot, file).replace(/^pages\//, '');
     const { path: routePath, params } = fileToRoutePath(rel);
     const content = (await readIfExists(file)) ?? '';
     const { meta, middleware, layout } = extractPageMeta(content);
@@ -190,19 +188,38 @@ export async function listPageRoutes(root: string): Promise<RouteInfo[]> {
     const children = [...byPath.keys()].filter(
       (p) => p.startsWith(routePath === '/' ? '/' : routePath + '/') && p !== routePath,
     );
-    const nested = children.length > 0;
 
     routes.push({
       path: routePath,
-      file: relativePath(root, file),
+      file: relativePath(scanRoot, file),
       absolutePath: file,
       params,
       meta,
       middleware,
       layout,
-      nested,
+      nested: children.length > 0,
       children,
+      layer,
     });
+  }
+
+  return routes;
+}
+
+export async function listPageRoutes(
+  root: string,
+  layers: Array<{ cwd: string; name: string }> = [],
+): Promise<RouteInfo[]> {
+  const targets = [{ cwd: root, name: undefined as string | undefined }, ...layers.map((l) => ({ cwd: l.cwd, name: l.name }))];
+  const routes: RouteInfo[] = [];
+  const seen = new Set<string>();
+
+  for (const target of targets) {
+    for (const route of await listRoutesIn(target.cwd, target.name)) {
+      if (seen.has(route.absolutePath)) continue;
+      seen.add(route.absolutePath);
+      routes.push(route);
+    }
   }
 
   return routes.sort((a, b) => a.path.localeCompare(b.path));
@@ -320,25 +337,35 @@ export async function parseVueComponent(file: string): Promise<{
   };
 }
 
-export async function listComponents(root: string): Promise<ComponentInfo[]> {
-  const files = await findFiles(root, ['components/**/*.vue']);
+export async function listComponents(
+  root: string,
+  layers: Array<{ cwd: string; name: string }> = [],
+): Promise<ComponentInfo[]> {
+  const targets = [{ cwd: root, name: undefined as string | undefined }, ...layers.map((l) => ({ cwd: l.cwd, name: l.name }))];
   const components: ComponentInfo[] = [];
+  const seen = new Set<string>();
 
-  for (const file of files) {
-    const rel = relativePath(root, file);
-    const relFromComponents = rel.replace(/^components\//, '');
-    const { props, emits, slots } = await parseVueComponent(file);
-    components.push({
-      name: componentAutoImportName(relFromComponents),
-      file: rel,
-      absolutePath: file,
-      directory: 'components',
-      props,
-      emits,
-      slots,
-      autoImported: true,
-      isPage: false,
-    });
+  for (const target of targets) {
+    const files = await findFiles(target.cwd, ['components/**/*.vue']);
+    for (const file of files) {
+      if (seen.has(file)) continue;
+      seen.add(file);
+      const rel = relativePath(target.cwd, file);
+      const relFromComponents = rel.replace(/^components\//, '');
+      const { props, emits, slots } = await parseVueComponent(file);
+      components.push({
+        name: componentAutoImportName(relFromComponents),
+        file: rel,
+        absolutePath: file,
+        directory: 'components',
+        props,
+        emits,
+        slots,
+        autoImported: true,
+        isPage: false,
+        layer: target.name,
+      });
+    }
   }
 
   return components.sort((a, b) => a.name.localeCompare(b.name));
@@ -357,29 +384,39 @@ async function parseComposable(file: string): Promise<{ parameters?: string; ret
   return { parameters: params || undefined, returnType };
 }
 
-export async function listComposables(root: string): Promise<ComposableInfo[]> {
-  const files = await findFiles(root, ['composables/**/*.{ts,js,mts,mjs}', 'utils/**/*.{ts,js,mts,mjs}']);
+export async function listComposables(
+  root: string,
+  layers: Array<{ cwd: string; name: string }> = [],
+): Promise<ComposableInfo[]> {
+  const targets = [{ cwd: root, name: undefined as string | undefined }, ...layers.map((l) => ({ cwd: l.cwd, name: l.name }))];
   const composables: ComposableInfo[] = [];
+  const seen = new Set<string>();
 
-  for (const file of files) {
-    const rel = relativePath(root, file);
-    const dir = rel.startsWith('composables/') ? 'composables' : 'utils';
-    const basename = rel.split('/').pop() ?? '';
-    const name = camelCase(basename);
-    const { parameters, returnType } = await parseComposable(file);
-    const exported = (await readIfExists(file)) ?? '';
-    const isAutoImported =
-      /^use[A-Z]/.test(name) || /export\s+(?:default|const)\s+/.test(exported) || /\bautoImport\s*:\s*true/.test(exported);
+  for (const target of targets) {
+    const files = await findFiles(target.cwd, ['composables/**/*.{ts,js,mts,mjs}', 'utils/**/*.{ts,js,mts,mjs}']);
+    for (const file of files) {
+      if (seen.has(file)) continue;
+      seen.add(file);
+      const rel = relativePath(target.cwd, file);
+      const dir = rel.startsWith('composables/') ? 'composables' : 'utils';
+      const basename = rel.split('/').pop() ?? '';
+      const name = camelCase(basename);
+      const { parameters, returnType } = await parseComposable(file);
+      const exported = (await readIfExists(file)) ?? '';
+      const isAutoImported =
+        /^use[A-Z]/.test(name) || /export\s+(?:default|const)\s+/.test(exported) || /\bautoImport\s*:\s*true/.test(exported);
 
-    composables.push({
-      name,
-      file: rel,
-      absolutePath: file,
-      parameters,
-      returnType,
-      autoImported: isAutoImported,
-      directory: dir,
-    });
+      composables.push({
+        name,
+        file: rel,
+        absolutePath: file,
+        parameters,
+        returnType,
+        autoImported: isAutoImported,
+        directory: dir,
+        layer: target.name,
+      });
+    }
   }
 
   return composables.sort((a, b) => a.name.localeCompare(b.name));
