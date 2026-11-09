@@ -28,14 +28,18 @@ export function registerConfigTools(server: McpServer, ctx: NuxtProjectContext):
 
   server.tool(
     'update_config',
-    'Update a nuxt.config value by dot-notation key and write the change back to disk. Returns a diff of the change. Use with caution; this mutates project files.',
+    'Update a nuxt.config value by dot-notation key. Returns a diff of the change. Dry-run by default; real writes require the server to be started with write authorization.',
     {
       key: z.string().describe('Dot-notation config key, e.g. ssr or runtimeConfig.public.apiBase'),
       value: z
         .string()
         .describe('New value as JSON or a JS expression, e.g. "false" or "\'https://api.example.com\'"'),
+      dryRun: z.boolean().optional().describe('When true (default), return the planned change without writing'),
     },
-    safe(async ({ key, value }) => {
+    safe(async ({ key, value, dryRun }) => {
+      const auth = ctx.writeGuard.authorize(dryRun ?? true);
+      if (!auth.ok) return jsonResult(auth);
+
       const config = await ctx.config();
       if (!config.configPath || !config.source) {
         return jsonResult({ ok: false, error: 'No writable nuxt.config file found.' });
@@ -51,10 +55,14 @@ export function registerConfigTools(server: McpServer, ctx: NuxtProjectContext):
       }
 
       const { newSource, diff } = setConfigValue(config.source, key, parsed, raw);
+      if (dryRun ?? true) {
+        return jsonResult({ ok: true, written: false, dryRun: true, key, configFile: config.configPath, diff });
+      }
+
       await fs.writeFile(config.configPath, newSource, 'utf8');
       await ctx.invalidate();
 
-      return jsonResult({ ok: true, key, configFile: config.configPath, diff });
+      return jsonResult({ ok: true, written: true, key, configFile: config.configPath, diff });
     }),
   );
 }
