@@ -27,6 +27,8 @@ export interface RouteInfo {
   nested: boolean;
   /** Child route paths (for nested routes) */
   children: string[];
+  /** Layer name this route originates from (undefined = project root) */
+  layer?: string;
 }
 
 export interface ComponentProp {
@@ -51,6 +53,8 @@ export interface ComponentInfo {
   autoImported: boolean;
   /** True when the component is a page route */
   isPage: boolean;
+  /** Layer name this component originates from (undefined = project root) */
+  layer?: string;
 }
 
 export interface ModuleInfo {
@@ -90,6 +94,8 @@ export interface ComposableInfo {
   autoImported: boolean;
   /** Directory the composable lives in */
   directory: string;
+  /** Layer name this composable originates from (undefined = project root) */
+  layer?: string;
 }
 
 export interface Finding {
@@ -118,6 +124,8 @@ export interface ProjectOverview {
   };
   directories: string[];
   modules: string[];
+  /** Names of resolved Nuxt layers (extends), highest priority first */
+  layers: string[];
   /** True when the build artifacts (.nuxt) exist */
   built: boolean;
 }
@@ -144,3 +152,39 @@ export interface SearchMatch {
 }
 
 export type Severity = 'error' | 'warning' | 'info';
+
+export interface LayerInfo {
+  /** Absolute path of the layer directory */
+  cwd: string;
+  /** Package name or directory basename */
+  name: string;
+  /** Absolute path of the layer's nuxt.config, or null */
+  configFile: string | null;
+  /** Raw `extends` entries declared by this layer */
+  extends: string[];
+  /** Resolution order: 0 is the project root (highest priority) */
+  priority: number;
+  /** Sub-layers this layer extends (lower priority) */
+  children: LayerInfo[];
+}
+
+export type AutoImportKind = 'function' | 'component' | 'value' | 'unknown';
+
+export interface AutoImportInfo {
+  /** Exported symbol name, e.g. `ref`, `useFoo`, `BaseButton` */
+  name: string;
+  /** Module specifier or file path the symbol comes from */
+  source: string;
+  kind: AutoImportKind;
+  /** Type signature when present in the declaration */
+  signature?: string;
+}
+
+export interface TscDiagnostic {
+  file?: string;
+  line?: number;
+  column?: number;
+  code: number;
+  message: string;
+  severity: 'error' | 'warning';
+}
