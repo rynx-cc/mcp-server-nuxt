@@ -12,6 +12,7 @@ import { registerModuleTools } from './modules.js';
 import { registerPageTools } from './pages.js';
 import { registerConfigTools } from './config.js';
 import { registerSearchTools } from './search.js';
+import { registerLayerTools } from './layers.js';
 
 export function registerAllTools(server: McpServer, ctx: NuxtProjectContext): void {
   registerOverviewTools(server, ctx);
@@ -23,4 +24,5 @@ export function registerAllTools(server: McpServer, ctx: NuxtProjectContext): vo
   registerPageTools(server, ctx);
   registerConfigTools(server, ctx);
   registerSearchTools(server, ctx);
+  registerLayerTools(server, ctx);
 }

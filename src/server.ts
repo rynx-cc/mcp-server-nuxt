@@ -5,6 +5,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { NuxtProjectContext } from './context.js';
 import { registerAllTools } from './tools/index.js';
+import { registerAllResources } from './resources/index.js';
 import { ProjectWatcher } from './utils/file-watcher.js';
 
 export interface ServerSetup {
@@ -15,6 +16,7 @@ export interface ServerSetup {
 export async function setupServer(server: McpServer, projectPath: string): Promise<ServerSetup> {
   const ctx = new NuxtProjectContext(projectPath);
   registerAllTools(server, ctx);
+  registerAllResources(server, ctx);
 
   // Keep the cached snapshot fresh: debounce invalidations on file changes.
   const watcher = new ProjectWatcher(ctx.root);

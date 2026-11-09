@@ -19,11 +19,13 @@ import {
 import type {
   ComposableInfo,
   ComponentInfo,
+  LayerInfo,
   ModuleInfo,
   ProjectOverview,
   RouteInfo,
   ServerRouteInfo,
 } from './types.js';
+import { resolveLayers } from './utils/layers.js';
 
 export interface ProjectSnapshot {
   routes: RouteInfo[];
@@ -39,6 +41,7 @@ export class NuxtProjectContext {
 
   private configCache: LoadedNuxtConfig | null = null;
   private snapshotCache: ProjectSnapshot | null = null;
+  private layersCache: LayerInfo[] | null = null;
 
   constructor(root?: string) {
     this.root = path.resolve(root ?? detectProjectRoot(process.cwd()));
@@ -102,6 +105,17 @@ export class NuxtProjectContext {
   async invalidate(): Promise<void> {
     this.snapshotCache = null;
     this.configCache = null;
+    this.layersCache = null;
+  }
+
+  /** Resolve the Nuxt extends hierarchy (highest priority first). */
+  async layers(): Promise<LayerInfo[]> {
+    if (this.layersCache) return this.layersCache;
+    const config = await this.config();
+    const ext = config.value['extends'];
+    const entries = Array.isArray(ext) ? ext.filter((e): e is string => typeof e === 'string') : [];
+    this.layersCache = await resolveLayers(this.root, entries);
+    return this.layersCache;
   }
 
   /** Read type info (.nuxt/imports.d.ts, .nuxt/types, schema). */
