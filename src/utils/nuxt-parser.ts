@@ -132,6 +132,36 @@ export function fileToRoutePath(relPath: string): { path: string; params: RouteP
   return { path: '/' + outSegments.join('/'), params };
 }
 
+/** Convert a resolved route path segment back to its file-system form. */
+function routeSegmentToFile(segment: string): string {
+  const optional = segment.match(/^:(.+)\?$/);
+  if (optional) return `[[${optional[1]}]]`;
+  const catchAll = segment.match(/^:(.+)\(\.\*\)\*$/);
+  if (catchAll) return `[...${catchAll[1]}]`;
+  const dynamic = segment.match(/^:(.+)$/);
+  if (dynamic) return `[${dynamic[1]}]`;
+  return segment;
+}
+
+/** Inverse of `fileToRoutePath`: `/users/:id` -> `pages/users/[id].vue`. */
+export function routePathToFile(routePath: string): string {
+  const trimmed = routePath.replace(/^\/+|\/+$/g, '');
+  if (!trimmed) return 'pages/index.vue';
+  const segments = trimmed.split('/').map(routeSegmentToFile);
+  return 'pages/' + segments.join('/') + '.vue';
+}
+
+/** Convert an API path + method into a Nitro handler file: `/api/hello` + `get` -> `server/api/hello.get.ts`. */
+export function routePathToNitroFile(apiPath: string, method?: string): string {
+  let trimmed = apiPath.replace(/^\/+|\/+$/g, '');
+  if (trimmed === 'api') trimmed = '';
+  else if (trimmed.startsWith('api/')) trimmed = trimmed.slice('api/'.length);
+  const segments = trimmed ? trimmed.split('/').map(routeSegmentToFile) : [];
+  const base = segments.length ? segments.join('/') : 'index';
+  const suffix = method && method !== '*' ? `.${method.toLowerCase()}` : '';
+  return `server/api/${base}${suffix}.ts`;
+}
+
 /** Extract layout/middleware/meta from `definePageMeta({ ... })`. */
 export function extractPageMeta(content: string): {
   meta: Record<string, unknown>;

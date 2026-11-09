@@ -1,10 +1,13 @@
 /**
- * Nitro server tools: list_server_routes.
+ * Nitro server tools: list_server_routes, scaffold_nitro_api.
  */
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { NuxtProjectContext } from '../context.js';
 import { jsonResult, safe } from '../utils/helpers.js';
+import { routePathToNitroFile } from '../utils/nuxt-parser.js';
 
 export function registerServerApiTools(server: McpServer, ctx: NuxtProjectContext): void {
   server.tool(
@@ -25,6 +28,31 @@ export function registerServerApiTools(server: McpServer, ctx: NuxtProjectContex
       };
 
       return jsonResult({ count: routes.length, totals: grouped, routes });
+    }),
+  );
+
+  server.tool(
+    'scaffold_nitro_api',
+    'Generate a new Nitro server API handler under server/api/ with H3 defineEventHandler and optional Zod body validation.',
+    {
+      path: z.string().describe('API path, e.g. /api/hello or /api/users/:id'),
+      method: z.enum(['get', 'post', 'put', 'patch', 'delete']).optional().describe('HTTP method (default: handle all methods)'),
+      zod: z.boolean().optional().describe('Include readValidatedBody with a Zod schema (default false)'),
+      dryRun: z.boolean().optional().describe('When true (default), return the planned file without writing'),
+    },
+    safe(async ({ path: apiPath, method, zod, dryRun }) => {
+      const auth = ctx.writeGuard.authorize(dryRun ?? true);
+      if (!auth.ok) return jsonResult(auth);
+
+      const file = ctx.p(routePathToNitroFile(apiPath, method));
+      const content = zod
+        ? "import { z } from 'zod'\n\nexport default defineEventHandler(async (event) => {\n  const body = await readValidatedBody(event, z.object({}).passthrough().safeParse)\n  if (!body.success) throw createError({ statusCode: 400, statusMessage: 'Invalid body' })\n  return body.data\n})\n"
+        : "export default defineEventHandler((event) => {\n  return { ok: true }\n})\n";
+
+      if (dryRun ?? true) return jsonResult({ written: false, dryRun: true, path: file, content });
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, content, 'utf8');
+      return jsonResult({ written: true, path: file });
     }),
   );
 }

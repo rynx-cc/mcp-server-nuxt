@@ -1,6 +1,8 @@
 /**
- * Component tools: list_components, get_component.
+ * Component tools: list_components, get_component, generate_component.
  */
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { NuxtProjectContext } from '../context.js';
@@ -43,6 +45,43 @@ export function registerComponentTools(server: McpServer, ctx: NuxtProjectContex
         });
       }
       return jsonResult({ found: true, component });
+    }),
+  );
+
+  server.tool(
+    'generate_component',
+    'Generate a new Vue SFC under components/ with typed defineProps/defineEmits and slots.',
+    {
+      name: z.string().describe('Component name, e.g. BaseButton or ui/BaseButton'),
+      props: z.record(z.string()).optional().describe('Prop name -> type, e.g. { "label": "string", "count": "number" }'),
+      emits: z.array(z.string()).optional().describe('Event names to declare with defineEmits'),
+      slots: z.array(z.string()).optional().describe('Slot names (default slot is always included)'),
+      dryRun: z.boolean().optional().describe('When true (default), return the planned file without writing'),
+    },
+    safe(async ({ name, props, emits, slots, dryRun }) => {
+      const auth = ctx.writeGuard.authorize(dryRun ?? true);
+      if (!auth.ok) return jsonResult(auth);
+
+      const clean = name.replace(/\.vue$/, '');
+      const file = ctx.p('components', clean + '.vue');
+      const propsBlock =
+        props && Object.keys(props).length > 0
+          ? `\nconst props = defineProps<{\n${Object.entries(props)
+            .map(([k, v]) => `  ${k}: ${v}`)
+            .join('\n')}\n}>()`
+          : '';
+      const emitsBlock =
+        emits && emits.length > 0
+          ? `\nconst emit = defineEmits<{\n${emits.map((e) => `  ${e}: []`).join('\n')}\n}>()`
+          : '';
+      const slotNodes =
+        slots && slots.length > 0 ? slots.map((s) => `    <slot name="${s}" />`).join('\n') : '    <slot />';
+      const content = `<script setup lang="ts">${propsBlock}${emitsBlock}\n</script>\n\n<template>\n${slotNodes}\n</template>\n`;
+
+      if (dryRun ?? true) return jsonResult({ written: false, dryRun: true, path: file, content });
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, content, 'utf8');
+      return jsonResult({ written: true, path: file });
     }),
   );
 }
