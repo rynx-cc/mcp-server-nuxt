@@ -13,8 +13,16 @@ export interface ServerSetup {
   watcher: ProjectWatcher;
 }
 
-export async function setupServer(server: McpServer, projectPath: string): Promise<ServerSetup> {
-  const ctx = new NuxtProjectContext(projectPath);
+export interface ServerSetupOptions {
+  allowWrites?: boolean;
+}
+
+export async function setupServer(
+  server: McpServer,
+  projectPath: string,
+  options: ServerSetupOptions = {},
+): Promise<ServerSetup> {
+  const ctx = new NuxtProjectContext(projectPath, options);
   registerAllTools(server, ctx);
   registerAllResources(server, ctx);
 

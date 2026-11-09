@@ -28,6 +28,7 @@ import type {
 } from './types.js';
 import { resolveLayers } from './utils/layers.js';
 import { readAutoImports } from './utils/auto-imports.js';
+import { WriteGuard } from './utils/write-guard.js';
 
 export interface ProjectSnapshot {
   routes: RouteInfo[];
@@ -40,13 +41,15 @@ export interface ProjectSnapshot {
 
 export class NuxtProjectContext {
   readonly root: string;
+  readonly writeGuard: WriteGuard;
 
   private configCache: LoadedNuxtConfig | null = null;
   private snapshotCache: ProjectSnapshot | null = null;
   private layersCache: LayerInfo[] | null = null;
 
-  constructor(root?: string) {
+  constructor(root?: string, options: { allowWrites?: boolean } = {}) {
     this.root = path.resolve(root ?? detectProjectRoot(process.cwd()));
+    this.writeGuard = new WriteGuard(options.allowWrites ?? false);
   }
 
   /** Resolve a path relative to the project root. */

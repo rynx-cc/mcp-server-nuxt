@@ -4,14 +4,15 @@ import { resolve } from "node:path";
 import { setupServer } from "./server.js";
 
 const projectPath = resolve(process.cwd(), process.argv[2] || "."); // Default to current directory if no path provided
+const allowWrites = process.argv.includes("--allow-writes") || process.env.MCP_NUXT_ALLOW_WRITES === "1";
 
 async function main() {
   const server = new McpServer({
     name: "mcp-server-nuxt",
-    version: "0.1.0",
+    version: "0.2.0",
   });
 
-  await setupServer(server, projectPath);
+  await setupServer(server, projectPath, { allowWrites });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
