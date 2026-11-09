@@ -1,5 +1,5 @@
 /**
- * Component tools: list_components, get_component, generate_component.
+ * Component tools: list_components, inspect_component, generate_component.
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -26,8 +26,8 @@ export function registerComponentTools(server: McpServer, ctx: NuxtProjectContex
   );
 
   server.tool(
-    'get_component',
-    'Get detailed information about a single component by its auto-imported name (e.g. BaseButton).',
+    'inspect_component',
+    'Get detailed information about a single component by its auto-imported name (e.g. BaseButton): props types, slots, emits, and script setup details.',
     {
       name: z.string().describe('Auto-imported component name, e.g. BaseButton'),
     },

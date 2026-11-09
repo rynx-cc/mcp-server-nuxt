@@ -1,5 +1,5 @@
 /**
- * Page analysis tools: analyze_page.
+ * Page analysis tools: inspect_route_meta.
  */
 import { promises as fs } from 'node:fs';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -10,8 +10,8 @@ import { extractPageMeta, parseVueComponent } from '../utils/nuxt-parser.js';
 
 export function registerPageTools(server: McpServer, ctx: NuxtProjectContext): void {
   server.tool(
-    'analyze_page',
-    'Analyze a single page: returns route params, middleware, layout, page meta plus the component props, emits and slots. Accepts a route path (e.g. /users/:id) or a page file path.',
+    'inspect_route_meta',
+    'Inspect a single route: returns route params, middleware, layout, page meta plus the component props, emits and slots. Accepts a route path (e.g. /users/:id) or a page file path.',
     {
       path: z.string().describe('Route path (e.g. /users/:id) or page file (e.g. pages/users/[id].vue)'),
     },
