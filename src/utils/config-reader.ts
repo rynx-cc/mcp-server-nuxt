@@ -383,6 +383,40 @@ export function setConfigValue(
   return { newSource, diff };
 }
 
+/**
+ * Append a module to the `modules` array in a nuxt.config source,
+ * preserving surrounding keys and formatting.
+ */
+export function appendModule(
+  source: string,
+  name: string,
+  options?: unknown,
+): { newSource: string; diff: string } {
+  const body = extractConfigBody(source);
+  if (!body) throw new Error('Could not locate defineNuxtConfig({...}) in nuxt.config');
+
+  const entry = options === undefined ? JSON.stringify(name) : `[${JSON.stringify(name)}, ${serializeValue(options)}]`;
+  const existing = findTopLevelAssignment(body, 'modules');
+
+  let newBody: string;
+  if (existing) {
+    const trimmed = existing.value.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      const inner = trimmed.slice(1, -1).trim();
+      newBody = body.replace(existing.fullMatch, `modules: [${inner ? `${inner}, ${entry}` : entry}]`);
+    } else {
+      // `modules` exists but is not an array literal; replace it.
+      newBody = body.replace(existing.fullMatch, `modules: [${entry}]`);
+    }
+  } else {
+    newBody = insertBeforeClosing(body, `modules: [${entry}],`);
+  }
+
+  const newSource = replaceConfigBody(source, body, newBody);
+  const diff = createDiff(source, newSource);
+  return { newSource, diff };
+}
+
 interface TopLevelAssignment {
   fullMatch: string;
   value: string;
@@ -401,13 +435,9 @@ function findTopLevelAssignment(body: string, key: string): TopLevelAssignment |
 }
 
 function insertBeforeClosing(body: string, line: string): string {
-  const trimmed = body.trimEnd();
-  if (trimmed.endsWith('}')) {
-    // Indent relative to the last non-empty line.
-    const indent = detectIndent(trimmed);
-    return `${trimmed.slice(0, -1)}\n${indent}  ${line}\n${indent}}`;
-  }
-  return `${trimmed}\n${line}`;
+  const indent = detectIndent(body);
+  const trimmed = body.replace(/\s+$/, '');
+  return `${trimmed}\n${indent}${line}\n`;
 }
 
 function detectIndent(body: string): string {

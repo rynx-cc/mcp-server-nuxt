@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendModule,
   extractConfigBody,
   getConfigValue,
   parseConfigSource,
@@ -74,5 +75,35 @@ describe('setConfigValue', () => {
     const { newSource } = setConfigValue(source, 'nitro', { preset: 'node' });
     expect(newSource).toContain('nitro:');
     expect(newSource).toContain('preset');
+  });
+});
+
+describe('appendModule', () => {
+  const source = [
+    "export default defineNuxtConfig({",
+    "  modules: ['@nuxtjs/tailwindcss'],",
+    "  ssr: true,",
+    '})',
+  ].join('\n');
+
+  it('appends a string module to an existing modules array', () => {
+    const { newSource } = appendModule(source, '@nuxtjs/i18n');
+    expect(newSource).toContain("modules: ['@nuxtjs/tailwindcss', \"@nuxtjs/i18n\"]");
+    expect(newSource).toContain('  ssr: true,');
+  });
+
+  it('appends a module with options as a tuple', () => {
+    const { newSource } = appendModule(source, '@nuxtjs/i18n', { locales: ['en', 'fr'] });
+    expect(newSource).toContain('["@nuxtjs/i18n",');
+    expect(newSource).toContain('"locales"');
+    expect(newSource).toContain('"en"');
+  });
+
+  it('inserts a modules array when none exists', () => {
+    const bare = 'export default defineNuxtConfig({\n  ssr: true,\n})';
+    const { newSource } = appendModule(bare, '@nuxtjs/tailwindcss');
+    expect(newSource).toContain('  modules: ["@nuxtjs/tailwindcss"],');
+    expect(newSource).toContain('  ssr: true,');
+    expect(newSource).toContain('\n})');
   });
 });
