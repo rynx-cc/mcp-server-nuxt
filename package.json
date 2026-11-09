@@ -14,7 +14,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean",
+    "build": "tsup src/index.ts --format esm --dts --clean --external @nuxt/kit",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
@@ -33,9 +33,17 @@
     "nitro"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rynx-cc/nuxt-mcp-server.git"
+  },
+  "homepage": "https://github.com/rynx-cc/nuxt-mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/rynx-cc/nuxt-mcp-server/issues"
+  },
+  "author": "rynx-cc",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@rollup/rollup-darwin-arm64": "^4.68.1",
     "fast-glob": "^3.3.0",
     "zod": "^3.23.0"
   },
