@@ -17,6 +17,7 @@ import {
   readTypeInfo,
 } from './utils/nuxt-parser.js';
 import type {
+  AutoImportInfo,
   ComposableInfo,
   ComponentInfo,
   LayerInfo,
@@ -26,6 +27,7 @@ import type {
   ServerRouteInfo,
 } from './types.js';
 import { resolveLayers } from './utils/layers.js';
+import { readAutoImports } from './utils/auto-imports.js';
 
 export interface ProjectSnapshot {
   routes: RouteInfo[];
@@ -121,6 +123,11 @@ export class NuxtProjectContext {
   /** Read type info (.nuxt/imports.d.ts, .nuxt/types, schema). */
   async typeInfo(): Promise<Awaited<ReturnType<typeof readTypeInfo>>> {
     return readTypeInfo(this.root);
+  }
+
+  /** Read the parsed auto-imports registry (requires .nuxt build output). */
+  async autoImports(): Promise<{ built: boolean; imports: AutoImportInfo[] }> {
+    return readAutoImports(this.root);
   }
 
   private async projectName(): Promise<string> {

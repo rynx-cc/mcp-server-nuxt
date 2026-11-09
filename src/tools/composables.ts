@@ -1,5 +1,5 @@
 /**
- * Composable tools: list_composables.
+ * Composable tools: list_composables, get_auto_imports.
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
@@ -21,6 +21,25 @@ export function registerComposableTools(server: McpServer, ctx: NuxtProjectConte
         autoImportedCount: composables.filter((c) => c.autoImported).length,
         composables: filtered,
       });
+    }),
+  );
+
+  server.tool(
+    'get_auto_imports',
+    'Read the .nuxt/imports.d.ts auto-imports registry: every auto-imported symbol with its source path and type signature. Requires the project to have been prepared/built. Use this instead of guessing import paths or function signatures.',
+    {
+      filter: z.string().optional().describe('Optional substring filter on the symbol name or source path'),
+    },
+    safe(async ({ filter }) => {
+      const { built, imports } = await ctx.autoImports();
+      let filtered = imports;
+      if (filter) {
+        const needle = filter.toLowerCase();
+        filtered = imports.filter(
+          (i) => i.name.toLowerCase().includes(needle) || i.source.toLowerCase().includes(needle),
+        );
+      }
+      return jsonResult({ built, count: filtered.length, total: imports.length, imports: filtered });
     }),
   );
 }

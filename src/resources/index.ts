@@ -4,7 +4,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { NuxtProjectContext } from '../context.js';
 import { registerLayersResource } from './layers-graph.js';
+import { registerAutoImportsResource } from './auto-imports.js';
 
 export function registerAllResources(server: McpServer, ctx: NuxtProjectContext): void {
   registerLayersResource(server, ctx);
+  registerAutoImportsResource(server, ctx);
 }
