@@ -91,6 +91,7 @@ export class NuxtProjectContext {
       },
       directories,
       modules: modules.map((m) => m.name),
+      layers: [],
       built,
     };
 
