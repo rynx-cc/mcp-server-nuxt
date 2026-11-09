@@ -2,14 +2,14 @@
 
 <div align="center">
 
-A production-grade Model Context Protocol server that shows LLMs how Nuxt actually works.
+A production-ready Model Context Protocol server that gives LLMs Nuxt's resolved state.
 
 [![npm version](https://img.shields.io/npm/v/mcp-server-nuxt?style=flat-square&color=00DC82&label=npm)](https://www.npmjs.com/package/mcp-server-nuxt)
 [![license](https://img.shields.io/npm/l/mcp-server-nuxt?style=flat-square&color=gray)](./LICENSE)
 [![node](https://img.shields.io/node/v/mcp-server-nuxt?style=flat-square&color=blue)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](#)
 
-File-based routing, auto-imports, `extends` layers, Nitro. These are the parts of Nuxt that generic LLMs get wrong most often.
+Generic LLMs get file-based routing, auto-imports, `extends` layers, and Nitro wrong more often than anything else in Nuxt.
 
 </div>
 
@@ -25,7 +25,7 @@ A generic AI agent looking at a Nuxt repo sees a directory tree. It does not see
 - `extends: ['../ui-kit']` layers an override chain of components, pages, and config over the app.
 - `server/api/hello.get.ts` registers `GET /api/hello` in the Nitro runtime.
 
-Without that context the model guesses. It invents import paths, misnames auto-imported components, and misreads layer precedence. The black box is the gap between the source tree and Nuxt's resolved runtime state.
+Without that context the model guesses. It invents import paths, misnames auto-imported components, and misreads layer precedence. The gap is between the source tree and Nuxt's resolved runtime state.
 
 `mcp-server-nuxt` exposes that resolved state through 22 tools and 7 read-only resources over MCP. It reads Nuxt's own output rather than scanning files.
 
@@ -36,7 +36,7 @@ Without that context the model guesses. It invents import paths, misnames auto-i
 | Deep Nuxt Kit integration | `loadNuxtConfig()` and `.nuxt/` build outputs first, with a source-level parser as fallback |
 | Layer-aware | Resolves the `extends` graph and tags each route, component, and composable with its origin layer |
 | Auto-imports registry | Serves the auto-imports index with source paths and TypeScript signatures from `.nuxt/imports.d.ts` |
-| Safety-first writes | Mutation tools default to `dry-run` and require `--allow-writes` |
+| Write protection | Mutation tools default to `dry-run` and require `--allow-writes` |
 | Strict TypeScript | `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride` |
 
 ---
