@@ -705,6 +705,47 @@ export async function isBuilt(root: string): Promise<boolean> {
   return exists(path.join(root, '.nuxt'));
 }
 
+/** Classify package.json dependencies into Nuxt modules vs runtime/dev deps. */
+export async function analyzeBundleDeps(root: string): Promise<{
+  packages: Array<{ name: string; version?: string; kind: 'nuxt-module' | 'runtime' | 'dev' | 'unknown' }>;
+  warnings: string[];
+}> {
+  const packages: Array<{ name: string; version?: string; kind: 'nuxt-module' | 'runtime' | 'dev' | 'unknown' }> = [];
+  const warnings: string[] = [];
+
+  const raw = await readIfExists(path.join(root, 'package.json'));
+  if (!raw) return { packages, warnings };
+
+  let pkg: Record<string, unknown>;
+  try {
+    pkg = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return { packages, warnings };
+  }
+
+  const dependencies = (pkg.dependencies ?? {}) as Record<string, string>;
+  const devDependencies = (pkg.devDependencies ?? {}) as Record<string, string>;
+  const all = new Map<string, { version: string; kind: 'runtime' | 'dev' }>();
+  for (const [name, version] of Object.entries(dependencies)) all.set(name, { version, kind: 'runtime' });
+  for (const [name, version] of Object.entries(devDependencies)) all.set(name, { version, kind: 'dev' });
+
+  for (const [name, { version, kind }] of all) {
+    const isModule = isNuxtModule(name);
+    packages.push({ name, version, kind: isModule ? 'nuxt-module' : kind });
+
+    if (isModule) {
+      if (kind === 'runtime') {
+        warnings.push(`Nuxt module "${name}" is in dependencies; it should be in devDependencies.`);
+      }
+      const installed = await exists(path.join(root, 'node_modules', ...name.split('/'), 'package.json'));
+      if (!installed) warnings.push(`Nuxt module "${name}" is declared but not installed in node_modules.`);
+    }
+  }
+
+  packages.sort((a, b) => a.name.localeCompare(b.name));
+  return { packages, warnings };
+}
+
 export async function readTypeInfo(root: string): Promise<{
   importsDts?: string;
   typesDir?: string[];

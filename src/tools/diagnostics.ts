@@ -5,6 +5,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { NuxtProjectContext } from '../context.js';
 import { jsonResult, safe } from '../utils/helpers.js';
 import { runTscCheck } from '../utils/tsc-checker.js';
+import { analyzeBundleDeps } from '../utils/nuxt-parser.js';
 
 export function registerDiagnosticTools(server: McpServer, ctx: NuxtProjectContext): void {
   server.tool(
@@ -19,6 +20,14 @@ export function registerDiagnosticTools(server: McpServer, ctx: NuxtProjectConte
         command: result.command,
         diagnostics: result.diagnostics,
       });
+    }),
+  );
+
+  server.tool(
+    'analyze_bundle_deps',
+    'Analyze package.json dependencies: classify Nuxt modules vs runtime/dev dependencies and surface warnings for misplaced or missing modules.',
+    safe(async () => {
+      return jsonResult(await analyzeBundleDeps(ctx.root));
     }),
   );
 }
