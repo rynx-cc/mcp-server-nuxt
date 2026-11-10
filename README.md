@@ -56,14 +56,18 @@ DevTools-style MCPs (for example `nuxt-mcp-dev`) attach to the Nuxt DevServer. T
 
 ## Quick start
 
-Prerequisites: Node.js 18 or newer.
+Prerequisites: Node.js 18 or newer. Works with npm, pnpm, or bun.
 
 ```bash
-# via npx
+# one-shot (no install)
 npx mcp-server-nuxt@latest /path/to/your/nuxt/app
+pnpm dlx mcp-server-nuxt@latest /path/to/your/nuxt/app
+bunx mcp-server-nuxt@latest /path/to/your/nuxt/app
 
 # or install globally
 npm install -g mcp-server-nuxt
+# pnpm add -g mcp-server-nuxt
+# bun add -g mcp-server-nuxt
 mcp-server-nuxt /path/to/your/nuxt/app
 ```
 
