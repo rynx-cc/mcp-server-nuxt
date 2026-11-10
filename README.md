@@ -40,13 +40,17 @@ Without that context the model guesses. It invents import paths, misnames auto-i
 
 ### FAQ
 
-**Q: How does that compare to the Nuxt DevTools MCP server?**
+* daniel roe **Q: How does that compare to the Nuxt DevTools MCP server?** 
 
-**A:** The distinction is **Standalone** vs **Runtime**.
+* **A:** The distinction is **Standalone** vs **Runtime**.
 
 DevTools-style MCPs (for example `nuxt-mcp-dev`) attach to the Nuxt DevServer. The AI only sees live project context while that server is up. If the repo was just cloned, dependencies are missing, or nobody has run `npm run dev`, the agent is effectively blind.
 
 `mcp-server-nuxt` is a standalone CLI (`npx mcp-server-nuxt /path`). It has no DevServer prerequisite. The agent can read the project's resolved fundamentals before the app is started — and before Cursor or Claude Desktop even need a running Nuxt process.
+
+* daniel roe **Q: cool! what kind of things is it for? ** 
+
+* A: @nuxt/kit" provides deep access to the Nuxt project structure, allowing you to understand and utilize features like automatic imports, file-based routing, and other Nuxt-specific mechanisms. Written by mcp 
 
 ---
 
