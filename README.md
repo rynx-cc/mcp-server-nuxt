@@ -1,7 +1,7 @@
 <div align="center"> 
 <h1>mcp-server-nuxt</h1>
 
-A production-ready Model Context Protocol server that gives LLMs Nuxt's resolved state.
+A production-ready Model Context Protocol server that gives LLMs a structured view of a Nuxt project.
 
 [![npm version](https://img.shields.io/npm/v/mcp-server-nuxt?style=flat-square&color=00DC82&label=npm)](https://www.npmjs.com/package/mcp-server-nuxt)
 [![license](https://img.shields.io/npm/l/mcp-server-nuxt?style=flat-square&color=gray)](./LICENSE)
@@ -26,16 +26,20 @@ A generic AI agent looking at a Nuxt repo sees a directory tree. It does not see
 
 Without that context the model guesses. It invents import paths, misnames auto-imported components, and misreads layer precedence. The gap is between the source tree and Nuxt's resolved runtime state.
 
-`mcp-server-nuxt` exposes that resolved state through **22 tools** and **7 read-only resources** over MCP. It reads Nuxt's own output (`loadNuxtConfig`, `.nuxt/`) rather than guessing from filenames alone.
+`mcp-server-nuxt` exposes that picture through **22 tools** and **7 read-only resources** over MCP. What it reads depends on the tool:
+
+- **Config** calls `@nuxt/kit`'s `loadNuxtConfig` when that optional dependency loads, and otherwise parses `nuxt.config` from source.
+- **Auto-imports** read `.nuxt/imports.d.ts`, then `.nuxt/types/imports.d.ts`. **Generated types** return the raw `.nuxt/imports.d.ts` text, the `.nuxt/types/**/*.d.ts` file list, and `.nuxt/schema/nuxt.schema.json` when those files exist. **`check_type_errors`** runs `tsc --noEmit` against `.nuxt/tsconfig.json`, then the project `tsconfig.json`.
+- **`list_routes`, `list_components`, `list_composables`, and `list_server_routes`** scan source by convention. They glob `pages/**/*.vue`, `components/**/*.vue`, `composables/**` plus `utils/**`, and `server/{api,routes,middleware,plugins}/**`. Pages, components, and composables also scan `extends` layers. Server routes do not. None of these read Nuxt's resolved route table or `.nuxt/components.d.ts`.
 
 ### Design principles
 
 | Principle | What it means in code |
 | --- | --- |
-| Deep Nuxt Kit integration | `loadNuxtConfig()` and `.nuxt/` build outputs first, with a source-level parser as fallback |
-| Layer-aware | Resolves the `extends` graph and tags each route, component, and composable with its origin layer |
-| Auto-imports registry | Serves the auto-imports index with source paths and TypeScript signatures from `.nuxt/imports.d.ts` |
-| Write protection | Mutation tools default to `dry-run` and require `--allow-writes` |
+| Config via Nuxt Kit | `read_config` calls `loadNuxtConfig()` when `@nuxt/kit` loads, and parses `nuxt.config` from source when it does not |
+| Layer-aware scans | Resolves the `extends` graph and tags each scanned page route, component, and composable with its origin layer. Server routes are scanned in the app root only |
+| Auto-imports registry | Parses `.nuxt/imports.d.ts`, then `.nuxt/types/imports.d.ts`. Does not read `.nuxt/components.d.ts` |
+| Write protection | Mutation tools default to `dryRun: true`. A real write also needs writes enabled (`--allow-writes` or `MCP_NUXT_ALLOW_WRITES=1`) and `dryRun: false` |
 | Strict TypeScript | `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride` |
 
 ### FAQ
@@ -46,11 +50,11 @@ Without that context the model guesses. It invents import paths, misnames auto-i
 
 DevTools-style MCPs (for example `nuxt-mcp-dev`) attach to the Nuxt DevServer. The AI only sees live project context while that server is up. If the repo was just cloned, dependencies are missing, or nobody has run `npm run dev`, the agent is effectively blind.
 
-`mcp-server-nuxt` is a standalone CLI (`npx mcp-server-nuxt /path`). It has no DevServer prerequisite. The agent can read the project's resolved fundamentals before the app is started.
+`mcp-server-nuxt` is a standalone CLI (`npx mcp-server-nuxt /path`). It has no DevServer prerequisite. The agent can inspect the project from source, and from `.nuxt/` when that output exists, before the app is started.
 
 **Q: What is it good for?**
 
-**A:** Giving an agent Nuxt's resolved view of a project: route maps, layer precedence, auto-imports with types, Nitro endpoints, module status, and (optionally) dry-run scaffolding for pages, components, and server handlers — without requiring `npm run dev`.
+**A:** Giving an agent a structured view of a Nuxt project: convention-scanned route and Nitro maps, `extends` layer precedence, auto-imports and types when `.nuxt/` exists, module status, and (optionally) dry-run scaffolding for pages, components, and server handlers — without requiring `npm run dev`.
 
 ---
 
@@ -76,14 +80,28 @@ The server speaks MCP over `stdio`; it is not a web service. MCP clients should 
 To run from a local checkout:
 
 ```bash
-git clone https://github.com/rynx-cc/nuxt-mcp-server.git
-cd nuxt-mcp-server
+git clone https://github.com/rynx-cc/mcp-server-nuxt.git
+cd mcp-server-nuxt
 npm install
 npm run build
 node dist/index.js /absolute/path/to/your/nuxt/app
 ```
 
-Omit the path to use the current directory. Pass `--allow-writes` **after** the path, or set `MCP_NUXT_ALLOW_WRITES=1`, to enable write tools. See [Write protection](#write-protection).
+The first argument is the project path (`process.argv[2]`, or `"."` when that argument is missing). Put the path before any flag:
+
+```bash
+mcp-server-nuxt . --allow-writes
+```
+
+A first argument of `--allow-writes` is used as the directory name. `--allow-writes` and `MCP_NUXT_ALLOW_WRITES=1` only authorize real writes. Mutation tools still default to `dryRun: true` until the caller passes `dryRun: false`. See [Write protection](#write-protection).
+
+---
+
+## Nuxt compatibility
+
+`@nuxt/kit` is an optional dependency pinned to `^3.14.0` (`>=3.14.0 <4.0.0`). Config reads use that package's `loadNuxtConfig` when it loads. `@nuxt/kit` 4.x is outside the range, so this server does not claim Nuxt 4 support.
+
+Scans look for Nuxt 3 root directories: `pages/`, `components/`, `composables/`, `utils/`, and `server/`. A custom `srcDir`, Nuxt 4's default `app/` directory, and `components.dirs` are outside those globs.
 
 ---
 
@@ -91,7 +109,7 @@ Omit the path to use the current directory. Pass `--allow-writes` **after** the 
 
 Replace `/absolute/path/to/your/nuxt/app` with the real absolute path to the Nuxt project you want the agent to inspect.
 
-Start **without** write access. Enable `MCP_NUXT_ALLOW_WRITES` only when you want mutation tools to leave dry-run mode.
+Start **without** write access. `MCP_NUXT_ALLOW_WRITES=1` only authorizes real writes. Mutation tools still default to `dryRun: true` until the caller passes `dryRun: false`. See [Write protection](#write-protection).
 
 ### Cursor (`.cursor/mcp.json`)
 
@@ -185,25 +203,27 @@ The server exposes read-only resources (`resources/*`) for large, cacheable data
                     extends resolution         .nuxt/tsconfig.json
 ```
 
+Config, auto-imports, generated types, and `tsc` use `@nuxt/kit` and `.nuxt/` as shown. Route, component, composable, and server listings are separate globs of source files.
+
 ### Resources
 
 | URI | Content |
 | --- | --- |
 | `nuxt://project/overview` | Project summary: Nuxt version, layers, directories, and route/component/composable/module counts |
-| `nuxt://project/routes` | Resolved route map: files, params, middleware, layouts, children |
+| `nuxt://project/routes` | Page routes from `pages/**/*.vue` in the project and `extends` layers: file, params, `definePageMeta` middleware and layout, children |
 | `nuxt://project/config` | Resolved `nuxt.config` object via `loadNuxtConfig`, with a source-level fallback |
 | `nuxt://project/modules` | Installed modules with status, source, and configuration |
 | `nuxt://project/layers` | `extends` hierarchy with override priority order and per-layer config |
-| `nuxt://project/auto-imports` | Parsed registry of auto-imported symbols with source paths and TypeScript signatures |
+| `nuxt://project/auto-imports` | Symbols parsed from `.nuxt/imports.d.ts` or `.nuxt/types/imports.d.ts` (not `.nuxt/components.d.ts`) |
 | `nuxt://project/types` | Raw generated types (`.nuxt/imports.d.ts`, `.nuxt/types`, schema) |
 
 ### Layers and auto-imports
 
-`nuxt://project/layers` resolves the `extends` graph and orders it by precedence (`project > later extends > earlier extends`), so the agent knows which `BaseButton.vue` wins when several layers define one.
+`nuxt://project/layers` resolves the `extends` graph and orders it by precedence (`project > later extends > earlier extends`). Page, component, and composable scans tag each file with its origin layer. They keep every match, so two layers that both define `components/BaseButton.vue` both appear.
 
-`nuxt://project/auto-imports` reads `.nuxt/imports.d.ts` and returns the registry of auto-imported symbols (`ref`, `useFoo`, `BaseButton`) with their file origins and type signatures.
+`nuxt://project/auto-imports` reads `.nuxt/imports.d.ts`, then `.nuxt/types/imports.d.ts` if the first file is missing. It returns symbols declared there, such as `ref`, `computed`, and `useFoo`, with their file origins and type signatures. It does not read `.nuxt/components.d.ts`, which is where component auto-imports usually live, so a component such as `BaseButton` is included only when that same symbol is also declared in `imports.d.ts`.
 
-`nuxt://project/auto-imports` needs the app to have been prepared or built (`nuxi prepare` or `nuxi build`) so `.nuxt/imports.d.ts` exists. Other tools still work from source-level parsing when `.nuxt/` is missing.
+`nuxt://project/auto-imports` needs the app to have been prepared or built (`nuxi prepare` or `nuxi build`) so one of those `imports.d.ts` files exists. Other tools still work from source-level parsing when `.nuxt/` is missing.
 
 ---
 
@@ -226,29 +246,29 @@ Aligned with the published `0.2.0` surface (22 tools).
 
 | Tool | Description |
 | --- | --- |
-| `list_routes` | File-based, dynamic, optional, catch-all, and nested routes |
+| `list_routes` | File-based routes from `pages/**/*.vue` in the project and `extends` layers, including dynamic, optional, catch-all, and nested routes |
 | `get_route` | One route by path, e.g. `/users/:id` |
 | `add_route` | Scaffold a page under `pages/` following Nuxt conventions |
 | `inspect_route_meta` | `definePageMeta`, layout, middleware, and props/emits/slots for a page |
-| `list_server_routes` | Nitro endpoints, middleware, and plugins with method and middleware chain |
+| `list_server_routes` | `server/api`, `server/routes`, `server/middleware`, and `server/plugins` in the app root only (not layers). Every API and route entry gets the same list of `server/middleware/*` filenames, not a per-handler chain |
 | `scaffold_nitro_api` | Generate an H3 handler with optional Zod body validation |
 
 ### Components, composables, and auto-imports
 
 | Tool | Description |
 | --- | --- |
-| `list_components` | All components, including those injected by layers and modules |
+| `list_components` | `components/**/*.vue` in the project and `extends` layers only. Skips `.nuxt/components.d.ts`, module-injected components (such as Nuxt UI), custom `srcDir`, and `components.dirs` |
 | `inspect_component` | Props types, emits, slots, and `<script setup>` details |
 | `generate_component` | Generate a typed Vue SFC |
-| `list_composables` | User-defined and auto-imported composables |
-| `get_auto_imports` | The `.nuxt/imports.d.ts` registry with source paths and signatures |
+| `list_composables` | Files under `composables/` and `utils/` in the project and `extends` layers. The auto-imported flag is a name/export heuristic, not the `.nuxt` registry |
+| `get_auto_imports` | Symbols from `.nuxt/imports.d.ts` or `.nuxt/types/imports.d.ts`, with source paths and signatures. Does not read `.nuxt/components.d.ts` |
 | `get_type_info` | Raw generated type info (`.nuxt/types`, schema) |
 
 ### Quality and diagnostics
 
 | Tool | Description |
 | --- | --- |
-| `check_type_errors` | Run `tsc --noEmit` against `.nuxt/tsconfig.json` |
+| `check_type_errors` | Run `tsc --noEmit` against `.nuxt/tsconfig.json`, falling back to the project `tsconfig.json`. If `tsc` is not in the project's `node_modules`, or no tsconfig exists, returns `{ ran: false, diagnostics: [] }` — check `ran` before treating an empty `diagnostics` array as a clean result |
 | `analyze_bundle_deps` | Classify Nuxt modules vs runtime/dev deps, flag missing or misplaced ones |
 | `search_code` | Search the codebase with line numbers and context lines |
 | `get_nuxt_docs` | Offline Nuxt guidance for routing, nitro, modules, layers |
@@ -289,8 +309,8 @@ Dry-run first, check the diff, then enable writes.
 Pull requests are welcome.
 
 ```bash
-git clone https://github.com/rynx-cc/nuxt-mcp-server.git
-cd nuxt-mcp-server
+git clone https://github.com/rynx-cc/mcp-server-nuxt.git
+cd mcp-server-nuxt
 npm install
 npm run typecheck   # tsc --noEmit (strict)
 npm test            # vitest
