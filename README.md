@@ -26,7 +26,7 @@ A generic AI agent looking at a Nuxt repo sees a directory tree. It does not see
 
 Without that context the model guesses. It invents import paths, misnames auto-imported components, and misreads layer precedence. The gap is between the source tree and Nuxt's resolved runtime state.
 
-`mcp-server-nuxt` exposes that resolved state through 22 tools and 7 read-only resources over MCP. It reads Nuxt's own output rather than scanning files.
+`mcp-server-nuxt` exposes that resolved state through **22 tools** and **7 read-only resources** over MCP. It reads Nuxt's own output (`loadNuxtConfig`, `.nuxt/`) rather than guessing from filenames alone.
 
 ### Design principles
 
@@ -40,17 +40,17 @@ Without that context the model guesses. It invents import paths, misnames auto-i
 
 ### FAQ
 
-* daniel roe **Q: How does that compare to the Nuxt DevTools MCP server?** 
+**Q: How does that compare to the Nuxt DevTools MCP server?**
 
-* **A:** The distinction is **Standalone** vs **Runtime**.
+**A:** Standalone vs Runtime.
 
 DevTools-style MCPs (for example `nuxt-mcp-dev`) attach to the Nuxt DevServer. The AI only sees live project context while that server is up. If the repo was just cloned, dependencies are missing, or nobody has run `npm run dev`, the agent is effectively blind.
 
-`mcp-server-nuxt` is a standalone CLI (`npx mcp-server-nuxt /path`). It has no DevServer prerequisite. The agent can read the project's resolved fundamentals before the app is started — and before Cursor or Claude Desktop even need a running Nuxt process.
+`mcp-server-nuxt` is a standalone CLI (`npx mcp-server-nuxt /path`). It has no DevServer prerequisite. The agent can read the project's resolved fundamentals before the app is started.
 
-* daniel roe **Q: cool! what kind of things is it for? ** 
+**Q: What is it good for?**
 
-* A: @nuxt/kit" provides deep access to the Nuxt project structure, allowing you to understand and utilize features like automatic imports, file-based routing, and other Nuxt-specific mechanisms. Written by mcp 
+**A:** Giving an agent Nuxt's resolved view of a project: route maps, layer precedence, auto-imports with types, Nitro endpoints, module status, and (optionally) dry-run scaffolding for pages, components, and server handlers — without requiring `npm run dev`.
 
 ---
 
@@ -60,58 +60,60 @@ Prerequisites: Node.js 18 or newer. Works with npm, pnpm, or bun.
 
 ```bash
 # one-shot (no install)
-npx mcp-server-nuxt@latest /path/to/your/nuxt/app
-pnpm dlx mcp-server-nuxt@latest /path/to/your/nuxt/app
-bunx mcp-server-nuxt@latest /path/to/your/nuxt/app
+npx -y mcp-server-nuxt@latest /absolute/path/to/your/nuxt/app
+pnpm dlx mcp-server-nuxt@latest /absolute/path/to/your/nuxt/app
+bunx mcp-server-nuxt@latest /absolute/path/to/your/nuxt/app
 
 # or install globally
 npm install -g mcp-server-nuxt
 # pnpm add -g mcp-server-nuxt
 # bun add -g mcp-server-nuxt
-mcp-server-nuxt /path/to/your/nuxt/app
+mcp-server-nuxt /absolute/path/to/your/nuxt/app
 ```
 
-The server speaks MCP over `stdio`; it is not a web service. To run from a local checkout:
+The server speaks MCP over `stdio`; it is not a web service. MCP clients should pass an **absolute** project path (their working directory is often undefined).
+
+To run from a local checkout:
 
 ```bash
-git clone https://github.com/<your-org>/mcp-server-nuxt.git
-cd mcp-server-nuxt
+git clone https://github.com/rynx-cc/nuxt-mcp-server.git
+cd nuxt-mcp-server
 npm install
 npm run build
-node dist/index.js /path/to/your/nuxt/app
+node dist/index.js /absolute/path/to/your/nuxt/app
 ```
 
-Omit the path to use the current directory. Pass `--allow-writes` or set `MCP_NUXT_ALLOW_WRITES=1` to enable write tools. See [Write protection](#write-protection).
+Omit the path to use the current directory. Pass `--allow-writes` **after** the path, or set `MCP_NUXT_ALLOW_WRITES=1`, to enable write tools. See [Write protection](#write-protection).
 
 ---
 
 ## Client configuration
 
+Replace `/absolute/path/to/your/nuxt/app` with the real absolute path to the Nuxt project you want the agent to inspect.
+
+Start **without** write access. Enable `MCP_NUXT_ALLOW_WRITES` only when you want mutation tools to leave dry-run mode.
+
 ### Cursor (`.cursor/mcp.json`)
 
-```jsonc
+```json
 {
   "mcpServers": {
     "mcp-server-nuxt": {
       "command": "npx",
-      "args": ["mcp-server-nuxt@latest", "/path/to/your/nuxt/app"],
-      "env": {
-        // set this only if the agent may write files
-        "MCP_NUXT_ALLOW_WRITES": "1"
-      }
+      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
     }
   }
 }
 ```
 
-### Claude Desktop (`claude_desktop_config.json`)
+Optional writes:
 
-```jsonc
+```json
 {
   "mcpServers": {
     "mcp-server-nuxt": {
       "command": "npx",
-      "args": ["mcp-server-nuxt@latest", "/path/to/your/nuxt/app"],
+      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"],
       "env": {
         "MCP_NUXT_ALLOW_WRITES": "1"
       }
@@ -120,7 +122,46 @@ Omit the path to use the current directory. Pass `--allow-writes` or set `MCP_NU
 }
 ```
 
-Start without `MCP_NUXT_ALLOW_WRITES`. The agent can still plan every change and show you the diff before applying.
+### Claude Desktop
+
+Config file locations:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Claude Desktop expects **strict JSON** (no comments).
+
+```json
+{
+  "mcpServers": {
+    "mcp-server-nuxt": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
+    }
+  }
+}
+```
+
+On Windows, if `npx` fails with `spawn npx ENOENT`, wrap it:
+
+```json
+{
+  "mcpServers": {
+    "mcp-server-nuxt": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "mcp-server-nuxt@latest",
+        "C:/absolute/path/to/your/nuxt/app"
+      ]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving. Prefer forward slashes in Windows paths inside JSON.
 
 ---
 
@@ -133,7 +174,7 @@ The server exposes read-only resources (`resources/*`) for large, cacheable data
                       │           mcp-server-nuxt               │
                       │                                         │
   MCP client ───────► │  ┌──────────────┐   ┌───────────────┐   │
-  (Claude/Cursor/v0)  │  │  22 Tools    │   │  7 Resources  │   │
+  (Claude / Cursor)   │  │  22 Tools    │   │  7 Resources  │   │
                       │  └──────┬───────┘   └───────┬───────┘   │
                       │         │                   │           │
                       │         ▼                   ▼           │
@@ -160,13 +201,15 @@ The server exposes read-only resources (`resources/*`) for large, cacheable data
 
 `nuxt://project/layers` resolves the `extends` graph and orders it by precedence (`project > later extends > earlier extends`), so the agent knows which `BaseButton.vue` wins when several layers define one.
 
-`nuxt://project/auto-imports` reads `.nuxt/imports.d.ts` and returns the registry of auto-imported symbols (`ref`, `useFoo`, `BaseButton`) with their file origins and type signatures. The model does not have to guess an import path.
+`nuxt://project/auto-imports` reads `.nuxt/imports.d.ts` and returns the registry of auto-imported symbols (`ref`, `useFoo`, `BaseButton`) with their file origins and type signatures.
 
-`nuxt://project/auto-imports` needs the app to have been prepared or built (`nuxi prepare` or `nuxi build`) so `.nuxt/imports.d.ts` exists.
+`nuxt://project/auto-imports` needs the app to have been prepared or built (`nuxi prepare` or `nuxi build`) so `.nuxt/imports.d.ts` exists. Other tools still work from source-level parsing when `.nuxt/` is missing.
 
 ---
 
 ## Tools reference
+
+Aligned with the published `0.2.0` surface (22 tools).
 
 ### Project and core
 
@@ -220,16 +263,19 @@ The server exposes read-only resources (`resources/*`) for large, cacheable data
 2. A real write needs `dryRun: false` and a server started with writes enabled:
 
 ```bash
-# CLI flag
-mcp-server-nuxt /path/to/app --allow-writes
+# CLI flag (path first, then flag)
+mcp-server-nuxt /absolute/path/to/app --allow-writes
 
 # or environment variable
-MCP_NUXT_ALLOW_WRITES=1 mcp-server-nuxt /path/to/app
+MCP_NUXT_ALLOW_WRITES=1 mcp-server-nuxt /absolute/path/to/app
 ```
 
-```jsonc
-// in the client config
-"env": { "MCP_NUXT_ALLOW_WRITES": "1" }
+```json
+{
+  "env": {
+    "MCP_NUXT_ALLOW_WRITES": "1"
+  }
+}
 ```
 
 3. Config edits touch only the affected lines. Comments and unrelated keys stay, and every change returns a diff you can review.
@@ -243,8 +289,8 @@ Dry-run first, check the diff, then enable writes.
 Pull requests are welcome.
 
 ```bash
-git clone https://github.com/<your-org>/mcp-server-nuxt.git
-cd mcp-server-nuxt
+git clone https://github.com/rynx-cc/nuxt-mcp-server.git
+cd nuxt-mcp-server
 npm install
 npm run typecheck   # tsc --noEmit (strict)
 npm test            # vitest
