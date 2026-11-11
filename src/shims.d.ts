@@ -5,4 +5,9 @@ declare module '@nuxt/kit' {
   export function loadNuxtConfig(
     options?: Record<string, unknown>,
   ): Promise<Record<string, unknown>>;
+
+  export function loadNuxt(options?: Record<string, unknown>): Promise<{
+    apps?: Record<string, { pages?: unknown[] }>;
+    close?: () => Promise<void>;
+  }>;
 }

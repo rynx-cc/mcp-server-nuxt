@@ -44,7 +44,10 @@ export function registerServerApiTools(server: McpServer, ctx: NuxtProjectContex
       const auth = ctx.writeGuard.authorize(dryRun ?? true);
       if (!auth.ok) return jsonResult(auth);
 
-      const file = ctx.p(routePathToNitroFile(apiPath, method));
+      const rel = routePathToNitroFile(apiPath, method);
+      const inside = ctx.writeGuard.assertInsideProject(rel);
+      if (!inside.ok) return jsonResult(inside);
+      const file = inside.path;
       const content = zod
         ? "import { z } from 'zod'\n\nexport default defineEventHandler(async (event) => {\n  const body = await readValidatedBody(event, z.object({}).passthrough().safeParse)\n  if (!body.success) throw createError({ statusCode: 400, statusMessage: 'Invalid body' })\n  return body.data\n})\n"
         : "export default defineEventHandler((event) => {\n  return { ok: true }\n})\n";

@@ -41,15 +41,21 @@ export function registerModuleTools(server: McpServer, ctx: NuxtProjectContext):
 
       const config = await ctx.config();
       if (!config.configPath || !config.source) {
-        return jsonResult({ ok: false, error: 'No writable nuxt.config file found.' });
+        return jsonResult({
+          error: { code: 'NOT_FOUND', message: 'No writable nuxt.config file found.', hint: 'Point the server at a Nuxt project root.' },
+        });
       }
+      const inside = ctx.writeGuard.assertInsideProject(config.configPath);
+      if (!inside.ok) return jsonResult(inside);
 
       let parsedOptions: unknown;
       if (options !== undefined) {
         try {
           parsedOptions = JSON.parse(options);
         } catch {
-          return jsonResult({ ok: false, error: 'options must be a valid JSON object string' });
+          return jsonResult({
+            error: { code: 'INVALID_ARGUMENT', message: 'options must be a valid JSON object string' },
+          });
         }
       }
 
@@ -58,7 +64,7 @@ export function registerModuleTools(server: McpServer, ctx: NuxtProjectContext):
         return jsonResult({ ok: true, written: false, dryRun: true, module: name, diff });
       }
 
-      await fs.writeFile(config.configPath, newSource, 'utf8');
+      await fs.writeFile(inside.path, newSource, 'utf8');
       await ctx.invalidate();
       return jsonResult({ ok: true, written: true, module: name, diff });
     }),

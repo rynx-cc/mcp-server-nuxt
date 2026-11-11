@@ -24,11 +24,25 @@ export function registerSearchTools(server: McpServer, ctx: NuxtProjectContext):
         .min(1)
         .max(200)
         .optional()
-        .describe('Maximum number of results (default 50)'),
+        .describe('Maximum number of results (default 50; alias of limit)'),
+      limit: z.number().int().min(1).max(200).optional().describe('Maximum number of results (default 50)'),
+      offset: z.number().int().min(0).optional().describe('Skip the first N matches (default 0)'),
     },
-    safe(async ({ query, fileTypes, maxResults }) => {
-      const matches = await searchCode(ctx.root, query, fileTypes, maxResults ?? 50);
-      return jsonResult({ query, count: matches.length, matches });
+    safe(async ({ query, fileTypes, maxResults, limit, offset }) => {
+      const cap = limit ?? maxResults ?? 50;
+      const skip = offset ?? 0;
+      // Fetch enough matches to apply offset, then trim to limit.
+      const matches = await searchCode(ctx.root, query, fileTypes, skip + cap);
+      const page = matches.slice(skip, skip + cap);
+      return jsonResult({
+        query,
+        count: page.length,
+        totalMatched: matches.length,
+        limit: cap,
+        offset: skip,
+        truncated: matches.length >= skip + cap,
+        matches: page,
+      });
     }),
   );
 

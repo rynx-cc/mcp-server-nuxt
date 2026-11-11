@@ -27,6 +27,7 @@ export async function setupServer(
   registerAllResources(server, ctx);
 
   // Keep the cached snapshot fresh: debounce invalidations on file changes.
+  // Skip the watcher under Vitest so the process can exit cleanly.
   const watcher = new ProjectWatcher(ctx.root);
   let timer: NodeJS.Timeout | undefined;
   watcher.on('change', () => {
@@ -35,7 +36,9 @@ export async function setupServer(
       void ctx.invalidate();
     }, 300);
   });
-  void watcher.start();
+  if (process.env.VITEST !== 'true' && process.env.MCP_NUXT_WATCH !== '0') {
+    void watcher.start();
+  }
 
   return { ctx, watcher };
 }

@@ -85,23 +85,27 @@ export async function loadNuxtConfig(projectRoot: string): Promise<LoadedNuxtCon
     /* keep null */
   }
 
-  // Attempt resolved config via @nuxt/kit (optional dependency).
-  try {
-    const kit = await import('@nuxt/kit');
-    if (typeof kit.loadNuxtConfig === 'function') {
-      const value = (await kit.loadNuxtConfig({
-        rootDir: projectRoot,
-        overrides: { _mcpServerNuxt: true },
-      })) as Record<string, unknown>;
-      return {
-        value: stripInternalKeys(value),
-        source,
-        configPath,
-        sourceKind: 'resolved',
-      };
+  // Attempt resolved config via @nuxt/kit only when the target project has Nuxt installed.
+  // Calling kit against bare fixtures (no local node_modules/nuxt) can hang or be very slow.
+  const projectHasNuxt = existsSync(path.join(projectRoot, 'node_modules', 'nuxt', 'package.json'));
+  if (projectHasNuxt) {
+    try {
+      const kit = await import('@nuxt/kit');
+      if (typeof kit.loadNuxtConfig === 'function') {
+        const value = (await kit.loadNuxtConfig({
+          rootDir: projectRoot,
+          overrides: { _mcpServerNuxt: true },
+        })) as Record<string, unknown>;
+        return {
+          value: stripInternalKeys(value),
+          source,
+          configPath,
+          sourceKind: 'resolved',
+        };
+      }
+    } catch {
+      // Fall through to source-level parsing.
     }
-  } catch (err) {
-    // Fall through to source-level parsing.
   }
 
   // Source-level parse: extract the object literal passed to defineNuxtConfig.

@@ -42,8 +42,12 @@ export function registerConfigTools(server: McpServer, ctx: NuxtProjectContext):
 
       const config = await ctx.config();
       if (!config.configPath || !config.source) {
-        return jsonResult({ ok: false, error: 'No writable nuxt.config file found.' });
+        return jsonResult({
+          error: { code: 'NOT_FOUND', message: 'No writable nuxt.config file found.', hint: 'Point the server at a Nuxt project root.' },
+        });
       }
+      const inside = ctx.writeGuard.assertInsideProject(config.configPath);
+      if (!inside.ok) return jsonResult(inside);
 
       // Prefer a parsed JSON value; fall back to treating the input as a raw JS expression.
       let parsed: unknown;
@@ -56,13 +60,13 @@ export function registerConfigTools(server: McpServer, ctx: NuxtProjectContext):
 
       const { newSource, diff } = setConfigValue(config.source, key, parsed, raw);
       if (dryRun ?? true) {
-        return jsonResult({ ok: true, written: false, dryRun: true, key, configFile: config.configPath, diff });
+        return jsonResult({ ok: true, written: false, dryRun: true, key, configFile: inside.path, diff });
       }
 
-      await fs.writeFile(config.configPath, newSource, 'utf8');
+      await fs.writeFile(inside.path, newSource, 'utf8');
       await ctx.invalidate();
 
-      return jsonResult({ ok: true, written: true, key, configFile: config.configPath, diff });
+      return jsonResult({ ok: true, written: true, key, configFile: inside.path, diff });
     }),
   );
 }

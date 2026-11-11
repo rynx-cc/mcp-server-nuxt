@@ -7,6 +7,8 @@ import { NuxtProjectContext } from '../src/context.js';
 import { registerRouteTools } from '../src/tools/routes.js';
 import { registerServerApiTools } from '../src/tools/server-api.js';
 import { registerComponentTools } from '../src/tools/components.js';
+import { registerComposableTools } from '../src/tools/composables.js';
+import { registerDiagnosticTools } from '../src/tools/diagnostics.js';
 import { routePathToFile, routePathToNitroFile } from '../src/utils/nuxt-parser.js';
 
 let base: string;
@@ -96,6 +98,36 @@ describe('generator tools', () => {
 
     const result = await callTool(server, 'add_route', { path: '/about', dryRun: false });
     expect(result.ok).toBe(false);
+    expect((result.error as { code?: string })?.code).toBe('UNAUTHORIZED');
     expect(await fs.readdir(path.join(base, 'pages')).catch(() => [])).toEqual([]);
+  });
+
+  it('generate_composable dry-run returns the planned file', async () => {
+    const ctx = new NuxtProjectContext(base);
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerComposableTools(server, ctx);
+
+    const result = await callTool(server, 'generate_composable', { name: 'counter', returns: '{ count: number }' });
+    expect(result.written).toBe(false);
+    expect(result.path).toBe(path.join(base, 'composables/useCounter.ts'));
+    expect(result.content).toContain('export function useCounter()');
+    expect(result.content).toContain('{ count: number }');
+  });
+
+  it('analyze_project returns structured health info without .nuxt', async () => {
+    await fs.writeFile(path.join(base, 'nuxt.config.ts'), 'export default defineNuxtConfig({})\n');
+    await fs.writeFile(path.join(base, 'package.json'), JSON.stringify({ name: 'fixture-analyze', dependencies: { nuxt: '3.14.0' } }));
+    await fs.mkdir(path.join(base, 'pages'), { recursive: true });
+    await fs.writeFile(path.join(base, 'pages/index.vue'), '<template><div>hi</div></template>\n');
+
+    const ctx = new NuxtProjectContext(base);
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerDiagnosticTools(server, ctx);
+
+    const result = await callTool(server, 'analyze_project', { limit: 10 });
+    expect(result.built).toBe(false);
+    expect(Array.isArray(result.hints)).toBe(true);
+    expect((result.hints as string[]).some((h) => h.includes('nuxi prepare'))).toBe(true);
+    expect(result.name).toBe('fixture-analyze');
   });
 });

@@ -49,7 +49,7 @@ export class NuxtProjectContext {
 
   constructor(root?: string, options: { allowWrites?: boolean } = {}) {
     this.root = path.resolve(root ?? detectProjectRoot(process.cwd()));
-    this.writeGuard = new WriteGuard(options.allowWrites ?? false);
+    this.writeGuard = new WriteGuard(options.allowWrites ?? false, this.root);
   }
 
   /** Resolve a path relative to the project root. */
@@ -71,12 +71,12 @@ export class NuxtProjectContext {
 
     const [routes, components, composables, serverRoutes, nuxtVersion, directories, built] =
       await Promise.all([
-        listPageRoutes(this.root, extraLayers),
-        listComponents(this.root, extraLayers),
-        listComposables(this.root, extraLayers),
+        listPageRoutes(this.root, extraLayers, config.value),
+        listComponents(this.root, extraLayers, config.value),
+        listComposables(this.root, extraLayers, config.value),
         listServerRoutes(this.root),
         getNuxtVersion(this.root),
-        listDirectories(this.root),
+        listDirectories(this.root, config.value),
         isBuilt(this.root),
       ]);
 

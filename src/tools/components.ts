@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { NuxtProjectContext } from '../context.js';
-import { jsonResult, safe } from '../utils/helpers.js';
+import { jsonResult, paginate, safe } from '../utils/helpers.js';
 
 export function registerComponentTools(server: McpServer, ctx: NuxtProjectContext): void {
   server.tool(
@@ -15,13 +15,23 @@ export function registerComponentTools(server: McpServer, ctx: NuxtProjectContex
     {
       name: z.string().optional().describe('Optional substring filter on component name'),
       directory: z.string().optional().describe('Optional directory filter (e.g. components)'),
+      limit: z.number().int().min(1).max(1000).optional().describe('Max results to return (default 200)'),
+      offset: z.number().int().min(0).optional().describe('Number of results to skip (default 0)'),
     },
-    safe(async ({ name, directory }) => {
+    safe(async ({ name, directory, limit, offset }) => {
       const { components } = await ctx.snapshot();
       let filtered = components;
       if (name) filtered = filtered.filter((c) => c.name.toLowerCase().includes(name.toLowerCase()));
       if (directory) filtered = filtered.filter((c) => c.directory === directory);
-      return jsonResult({ count: filtered.length, total: components.length, components: filtered });
+      const page = paginate(filtered, limit ?? 200, offset ?? 0);
+      return jsonResult({
+        count: page.items.length,
+        total: page.total,
+        limit: page.limit,
+        offset: page.offset,
+        truncated: page.truncated,
+        components: page.items,
+      });
     }),
   );
 
@@ -63,7 +73,10 @@ export function registerComponentTools(server: McpServer, ctx: NuxtProjectContex
       if (!auth.ok) return jsonResult(auth);
 
       const clean = name.replace(/\.vue$/, '');
-      const file = ctx.p('components', clean + '.vue');
+      const rel = path.join('components', clean + '.vue');
+      const inside = ctx.writeGuard.assertInsideProject(rel);
+      if (!inside.ok) return jsonResult(inside);
+      const file = inside.path;
       const propsBlock =
         props && Object.keys(props).length > 0
           ? `\nconst props = defineProps<{\n${Object.entries(props)

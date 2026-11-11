@@ -3,6 +3,22 @@
  */
 import type { ToolResult } from '../types.js';
 
+export type ToolErrorCode =
+  | 'INTERNAL'
+  | 'NOT_FOUND'
+  | 'INVALID_PATH'
+  | 'UNAUTHORIZED'
+  | 'NOT_PREPARED'
+  | 'INVALID_ARGUMENT';
+
+export interface ToolErrorBody {
+  error: {
+    code: ToolErrorCode;
+    message: string;
+    hint?: string;
+  };
+}
+
 /** Build a tool result with a single text block. */
 export function textResult(text: string): ToolResult {
   return { content: [{ type: 'text', text }] };
@@ -13,10 +29,25 @@ export function jsonResult(value: unknown): ToolResult {
   return textResult(JSON.stringify(value, null, 2));
 }
 
-/** Format an error for structured tool output (never throws). */
+/** Structured tool error (never includes stack traces). */
+export function structuredError(
+  code: ToolErrorCode,
+  message: string,
+  hint?: string,
+): ToolResult {
+  const body: ToolErrorBody = { error: { code, message } };
+  if (hint) body.error.hint = hint;
+  return jsonResult(body);
+}
+
+/** Format an error for structured tool output (never throws, never leaks stacks). */
 export function errorResult(error: unknown): ToolResult {
   const message = error instanceof Error ? error.message : String(error);
-  return textResult(JSON.stringify({ error: message }, null, 2));
+  return structuredError(
+    'INTERNAL',
+    message,
+    'Retry the request. If it persists, check the project path and run nuxi prepare.',
+  );
 }
 
 /** Wrap a handler so errors become structured results instead of crashes. */
@@ -29,6 +60,25 @@ export function safe<Args extends unknown[], R extends ToolResult>(
     } catch (error) {
       return errorResult(error) as R;
     }
+  };
+}
+
+/** Apply limit/offset pagination to an array. */
+export function paginate<T>(
+  items: T[],
+  limit?: number,
+  offset?: number,
+): { items: T[]; total: number; limit: number; offset: number; truncated: boolean } {
+  const total = items.length;
+  const start = Math.max(0, offset ?? 0);
+  const max = limit === undefined ? total - start : Math.max(0, limit);
+  const sliced = items.slice(start, start + max);
+  return {
+    items: sliced,
+    total,
+    limit: max,
+    offset: start,
+    truncated: start + sliced.length < total,
   };
 }
 

@@ -68,7 +68,10 @@ export function registerRouteTools(server: McpServer, ctx: NuxtProjectContext): 
       const auth = ctx.writeGuard.authorize(dryRun ?? true);
       if (!auth.ok) return jsonResult(auth);
 
-      const file = ctx.p(routePathToFile(routePath));
+      const rel = routePathToFile(routePath);
+      const inside = ctx.writeGuard.assertInsideProject(rel);
+      if (!inside.ok) return jsonResult(inside);
+      const file = inside.path;
       const meta: string[] = [];
       if (layout) meta.push(`  layout: '${layout}'`);
       if (middleware && middleware.length > 0) {

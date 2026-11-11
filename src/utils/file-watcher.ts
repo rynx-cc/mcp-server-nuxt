@@ -32,15 +32,22 @@ export class ProjectWatcher extends EventEmitter {
     this.loop();
   }
 
+  private loopTimer: NodeJS.Timeout | undefined;
+
   stop(): void {
     this.running = false;
+    if (this.loopTimer) clearTimeout(this.loopTimer);
+    this.loopTimer = undefined;
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
   }
 
   private async loop(): Promise<void> {
     while (this.running) {
-      await new Promise((resolve) => setTimeout(resolve, this.intervalMs));
+      await new Promise<void>((resolve) => {
+        this.loopTimer = setTimeout(() => resolve(), this.intervalMs);
+      });
+      if (!this.running) break;
       await this.scan();
     }
   }

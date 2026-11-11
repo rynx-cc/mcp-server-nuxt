@@ -198,30 +198,50 @@ export function extractPageMeta(content: string): {
   return { meta, middleware, layout };
 }
 
-async function listRoutesIn(scanRoot: string, layer?: string): Promise<RouteInfo[]> {
-  const files = await findFiles(scanRoot, ['pages/**/*.vue']);
+/** Resolve pages directories from Nuxt config (srcDir / dir.pages / app/pages). */
+export function resolvePagesDirs(projectRoot: string, config: Record<string, unknown> = {}): string[] {
+  const dirs = new Set<string>();
+  const srcDir =
+    typeof config['srcDir'] === 'string' ? path.resolve(projectRoot, config['srcDir']) : projectRoot;
+  const pagesDirName =
+    typeof (config['dir'] as { pages?: string } | undefined)?.pages === 'string'
+      ? (config['dir'] as { pages: string }).pages
+      : 'pages';
+  dirs.add(path.isAbsolute(pagesDirName) ? pagesDirName : path.join(srcDir, pagesDirName));
+  dirs.add(path.join(projectRoot, 'pages'));
+  dirs.add(path.join(projectRoot, 'app', 'pages'));
+  dirs.add(path.join(srcDir, 'pages'));
+  return [...dirs];
+}
+
+async function listRoutesInPagesDir(
+  projectRoot: string,
+  pagesDir: string,
+  layer?: string,
+): Promise<RouteInfo[]> {
+  if (!(await exists(pagesDir))) return [];
+  const files = await findFiles(pagesDir, ['**/*.vue']);
   const byPath = new Map<string, string>();
 
   for (const file of files) {
-    const rel = relativePath(scanRoot, file).replace(/^pages\//, '');
+    const rel = relativePath(pagesDir, file);
     byPath.set(fileToRoutePath(rel).path, file);
   }
 
   const routes: RouteInfo[] = [];
   for (const file of files) {
-    const rel = relativePath(scanRoot, file).replace(/^pages\//, '');
+    const rel = relativePath(pagesDir, file);
     const { path: routePath, params } = fileToRoutePath(rel);
     const content = (await readIfExists(file)) ?? '';
     const { meta, middleware, layout } = extractPageMeta(content);
 
-    // Detect nesting: a parent route `foo.vue` with `foo/bar.vue` children.
     const children = [...byPath.keys()].filter(
       (p) => p.startsWith(routePath === '/' ? '/' : routePath + '/') && p !== routePath,
     );
 
     routes.push({
       path: routePath,
-      file: relativePath(scanRoot, file),
+      file: relativePath(projectRoot, file),
       absolutePath: file,
       params,
       meta,
@@ -236,23 +256,91 @@ async function listRoutesIn(scanRoot: string, layer?: string): Promise<RouteInfo
   return routes;
 }
 
+/**
+ * Prefer Nuxt-resolved page dirs from config / @nuxt/kit; fall back to scanning
+ * classic `pages/` and Nuxt 4 `app/pages/`.
+ */
 export async function listPageRoutes(
   root: string,
   layers: Array<{ cwd: string; name: string }> = [],
+  config: Record<string, unknown> = {},
 ): Promise<RouteInfo[]> {
-  const targets = [{ cwd: root, name: undefined as string | undefined }, ...layers.map((l) => ({ cwd: l.cwd, name: l.name }))];
+  const fromNuxt = await tryResolvePagesViaNuxt(root);
+  if (fromNuxt) return fromNuxt;
+
+  const targets = [
+    { cwd: root, name: undefined as string | undefined, config },
+    ...layers.map((l) => ({ cwd: l.cwd, name: l.name, config: {} as Record<string, unknown> })),
+  ];
   const routes: RouteInfo[] = [];
   const seen = new Set<string>();
 
   for (const target of targets) {
-    for (const route of await listRoutesIn(target.cwd, target.name)) {
-      if (seen.has(route.absolutePath)) continue;
-      seen.add(route.absolutePath);
-      routes.push(route);
+    for (const pagesDir of resolvePagesDirs(target.cwd, target.config)) {
+      for (const route of await listRoutesInPagesDir(root, pagesDir, target.name)) {
+        if (seen.has(route.absolutePath)) continue;
+        seen.add(route.absolutePath);
+        // Recompute file relative to the owning project/layer root for clarity.
+        route.file = relativePath(target.cwd, route.absolutePath);
+        routes.push(route);
+      }
     }
   }
 
   return routes.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/** Attempt to resolve pages through a live Nuxt instance when available. */
+async function tryResolvePagesViaNuxt(root: string): Promise<RouteInfo[] | null> {
+  try {
+    const kit = await import('@nuxt/kit');
+    if (typeof kit.loadNuxt !== 'function') return null;
+    const nuxtPkg = path.join(root, 'node_modules', 'nuxt', 'package.json');
+    if (!(await exists(nuxtPkg))) return null;
+
+    const nuxt = await kit.loadNuxt({
+      cwd: root,
+      ready: true,
+      overrides: { _mcpServerNuxt: true },
+    });
+    try {
+      const apps = (nuxt as { apps?: Record<string, { pages?: unknown[] }> }).apps;
+      const pages = apps?.default?.pages;
+      if (!Array.isArray(pages) || pages.length === 0) return null;
+
+      const routes: RouteInfo[] = [];
+      for (const page of pages) {
+        const p = page as {
+          path?: string;
+          file?: string;
+          children?: unknown[];
+          meta?: Record<string, unknown>;
+        };
+        if (!p.path || !p.file) continue;
+        const abs = path.isAbsolute(p.file) ? p.file : path.join(root, p.file);
+        const rel = relativePath(root, abs);
+        const { params } = fileToRoutePath(rel.replace(/^pages\//, '').replace(/^app\/pages\//, ''));
+        const content = (await readIfExists(abs)) ?? '';
+        const extracted = extractPageMeta(content);
+        routes.push({
+          path: p.path.startsWith('/') ? p.path : `/${p.path}`,
+          file: rel,
+          absolutePath: abs,
+          params,
+          meta: { ...extracted.meta, ...(p.meta ?? {}) },
+          middleware: extracted.middleware,
+          layout: extracted.layout,
+          nested: Array.isArray(p.children) && p.children.length > 0,
+          children: [],
+        });
+      }
+      return routes.length > 0 ? routes.sort((a, b) => a.path.localeCompare(b.path)) : null;
+    } finally {
+      await (nuxt as { close?: () => Promise<void> }).close?.();
+    }
+  } catch {
+    return null;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -370,24 +458,25 @@ export async function parseVueComponent(file: string): Promise<{
 export async function listComponents(
   root: string,
   layers: Array<{ cwd: string; name: string }> = [],
+  _config: Record<string, unknown> = {},
 ): Promise<ComponentInfo[]> {
   const targets = [{ cwd: root, name: undefined as string | undefined }, ...layers.map((l) => ({ cwd: l.cwd, name: l.name }))];
   const components: ComponentInfo[] = [];
   const seen = new Set<string>();
 
   for (const target of targets) {
-    const files = await findFiles(target.cwd, ['components/**/*.vue']);
+    const files = await findFiles(target.cwd, ['components/**/*.vue', 'app/components/**/*.vue']);
     for (const file of files) {
       if (seen.has(file)) continue;
       seen.add(file);
       const rel = relativePath(target.cwd, file);
-      const relFromComponents = rel.replace(/^components\//, '');
+      const relFromComponents = rel.replace(/^(?:app\/)?components\//, '');
       const { props, emits, slots } = await parseVueComponent(file);
       components.push({
         name: componentAutoImportName(relFromComponents),
         file: rel,
         absolutePath: file,
-        directory: 'components',
+        directory: rel.startsWith('app/components') ? 'app/components' : 'components',
         props,
         emits,
         slots,
@@ -417,18 +506,24 @@ async function parseComposable(file: string): Promise<{ parameters?: string; ret
 export async function listComposables(
   root: string,
   layers: Array<{ cwd: string; name: string }> = [],
+  _config: Record<string, unknown> = {},
 ): Promise<ComposableInfo[]> {
   const targets = [{ cwd: root, name: undefined as string | undefined }, ...layers.map((l) => ({ cwd: l.cwd, name: l.name }))];
   const composables: ComposableInfo[] = [];
   const seen = new Set<string>();
 
   for (const target of targets) {
-    const files = await findFiles(target.cwd, ['composables/**/*.{ts,js,mts,mjs}', 'utils/**/*.{ts,js,mts,mjs}']);
+    const files = await findFiles(target.cwd, [
+      'composables/**/*.{ts,js,mts,mjs}',
+      'utils/**/*.{ts,js,mts,mjs}',
+      'app/composables/**/*.{ts,js,mts,mjs}',
+      'app/utils/**/*.{ts,js,mts,mjs}',
+    ]);
     for (const file of files) {
       if (seen.has(file)) continue;
       seen.add(file);
       const rel = relativePath(target.cwd, file);
-      const dir = rel.startsWith('composables/') ? 'composables' : 'utils';
+      const dir = rel.includes('composables/') ? (rel.startsWith('app/') ? 'app/composables' : 'composables') : (rel.startsWith('app/') ? 'app/utils' : 'utils');
       const basename = rel.split('/').pop() ?? '';
       const name = camelCase(basename);
       const { parameters, returnType } = await parseComposable(file);
@@ -692,13 +787,87 @@ export async function getNuxtVersion(root: string): Promise<string | undefined> 
   return undefined;
 }
 
-export async function listDirectories(root: string): Promise<string[]> {
-  const dirs = ['pages', 'components', 'composables', 'utils', 'server', 'layouts', 'middleware', 'plugins', 'assets', 'public', 'content', 'modules'];
+export async function listDirectories(root: string, _config: Record<string, unknown> = {}): Promise<string[]> {
+  const dirs = [
+    'pages',
+    'app',
+    'app/pages',
+    'components',
+    'app/components',
+    'composables',
+    'app/composables',
+    'utils',
+    'server',
+    'layouts',
+    'middleware',
+    'plugins',
+    'assets',
+    'public',
+    'content',
+    'modules',
+  ];
   const existing: string[] = [];
   for (const dir of dirs) {
     if (await exists(path.join(root, dir))) existing.push(dir);
   }
   return existing;
+}
+
+/** Aggregate project health analysis for `analyze_project`. */
+export async function analyzeProject(
+  root: string,
+  snapshot: {
+    overview: {
+      name: string;
+      nuxtVersion?: string;
+      hasNuxtConfig: boolean;
+      counts: Record<string, number>;
+      layers?: string[];
+      built: boolean;
+      directories: string[];
+    };
+    routes: unknown[];
+    components: unknown[];
+    modules: unknown[];
+  },
+  options: { limit?: number; offset?: number } = {},
+): Promise<Record<string, unknown>> {
+  const deps = await analyzeBundleDeps(root);
+  const built = snapshot.overview.built;
+  const hints: string[] = [];
+  if (!built) {
+    hints.push('Project has no .nuxt directory. Run `nuxi prepare` (or `nuxi build`) for auto-imports and generated types.');
+  }
+  if (!snapshot.overview.hasNuxtConfig) {
+    hints.push('No nuxt.config.* found. Point the MCP server at a Nuxt project root.');
+  }
+  const offset = Math.max(0, options.offset ?? 0);
+  const limit = options.limit ?? 50;
+  const componentSlice = snapshot.components.slice(offset, offset + limit);
+  return {
+    name: snapshot.overview.name,
+    nuxtVersion: snapshot.overview.nuxtVersion,
+    built,
+    hasNuxtConfig: snapshot.overview.hasNuxtConfig,
+    counts: snapshot.overview.counts,
+    layers: snapshot.overview.layers ?? [],
+    directories: snapshot.overview.directories,
+    modules: snapshot.modules,
+    dependencies: {
+      total: deps.packages.length,
+      warnings: deps.warnings,
+      packages: deps.packages.slice(0, limit),
+    },
+    components: {
+      total: snapshot.components.length,
+      limit,
+      offset,
+      truncated: offset + componentSlice.length < snapshot.components.length,
+      items: componentSlice,
+    },
+    routes: { total: snapshot.routes.length },
+    hints,
+  };
 }
 
 export async function isBuilt(root: string): Promise<boolean> {
