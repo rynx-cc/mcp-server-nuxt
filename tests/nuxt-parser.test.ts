@@ -3,6 +3,7 @@ import {
   componentAutoImportName,
   extractPageMeta,
   fileToRoutePath,
+  routePathToFile,
 } from '../src/utils/nuxt-parser.js';
 
 describe('fileToRoutePath', () => {
@@ -32,6 +33,19 @@ describe('fileToRoutePath', () => {
       params: [{ name: 'slug', optional: false, catchAll: true }],
     });
   });
+
+  it('maps optional catch-all segments and round-trips them', () => {
+    expect(fileToRoutePath('[[...slug]].vue')).toEqual({
+      path: '/:slug(.*)*?',
+      params: [{ name: 'slug', optional: true, catchAll: true }],
+    });
+    expect(routePathToFile('/:slug(.*)*?')).toBe('pages/[[...slug]].vue');
+  });
+
+  it('omits route groups from the URL', () => {
+    expect(fileToRoutePath('(marketing)/about.vue')).toEqual({ path: '/about', params: [] });
+    expect(fileToRoutePath('(marketing)/index.vue')).toEqual({ path: '/', params: [] });
+  });
 });
 
 describe('extractPageMeta', () => {
@@ -59,7 +73,10 @@ describe('extractPageMeta', () => {
 describe('componentAutoImportName', () => {
   it('pascal-cases nested component paths', () => {
     expect(componentAutoImportName('BaseButton.vue')).toBe('BaseButton');
-    expect(componentAutoImportName('base/Card/BaseCard.vue')).toBe('BaseCardBaseCard');
+    expect(componentAutoImportName('base/BaseButton.vue')).toBe('BaseButton');
+    expect(componentAutoImportName('base/Card/BaseCard.vue')).toBe('BaseCard');
     expect(componentAutoImportName('ui/form-input.vue')).toBe('UiFormInput');
+    expect(componentAutoImportName('button/index.vue')).toBe('Button');
+    expect(componentAutoImportName('(marketing)/Hero.vue')).toBe('Hero');
   });
 });

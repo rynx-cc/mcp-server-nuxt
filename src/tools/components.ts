@@ -7,6 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { NuxtProjectContext } from '../context.js';
 import { jsonResult, safe } from '../utils/helpers.js';
+import { prepareWrite } from '../utils/write-path.js';
 
 export function registerComponentTools(server: McpServer, ctx: NuxtProjectContext): void {
   server.tool(
@@ -50,10 +51,10 @@ export function registerComponentTools(server: McpServer, ctx: NuxtProjectContex
 
   server.tool(
     'generate_component',
-    'Generate a new Vue SFC under components/ with typed defineProps/defineEmits and slots.',
+    'Generate a new Vue SFC under the project components directory (honoring srcDir) with typed defineProps/defineEmits and slots.',
     {
       name: z.string().describe('Component name, e.g. BaseButton or ui/BaseButton'),
-      props: z.record(z.string()).optional().describe('Prop name -> type, e.g. { "label": "string", "count": "number" }'),
+      props: z.record(z.string(), z.string()).optional().describe('Prop name -> type, e.g. { "label": "string", "count": "number" }'),
       emits: z.array(z.string()).optional().describe('Event names to declare with defineEmits'),
       slots: z.array(z.string()).optional().describe('Slot names (default slot is always included)'),
       dryRun: z.boolean().optional().describe('When true (default), return the planned file without writing'),
@@ -62,8 +63,13 @@ export function registerComponentTools(server: McpServer, ctx: NuxtProjectContex
       const auth = ctx.writeGuard.authorize(dryRun ?? true);
       if (!auth.ok) return jsonResult(auth);
 
-      const clean = name.replace(/\.vue$/, '');
-      const file = ctx.p('components', clean + '.vue');
+      const dirs = await ctx.sourceDirs();
+      const clean = name.replace(/\.vue$/i, '').replace(/\\/g, '/');
+      const { file, exists: alreadyExists } = await prepareWrite(
+        ctx.root,
+        dirs.componentsDir,
+        path.resolve(dirs.componentsDir, `${clean}.vue`),
+      );
       const propsBlock =
         props && Object.keys(props).length > 0
           ? `\nconst props = defineProps<{\n${Object.entries(props)
@@ -78,7 +84,10 @@ export function registerComponentTools(server: McpServer, ctx: NuxtProjectContex
         slots && slots.length > 0 ? slots.map((s) => `    <slot name="${s}" />`).join('\n') : '    <slot />';
       const content = `<script setup lang="ts">${propsBlock}${emitsBlock}\n</script>\n\n<template>\n${slotNodes}\n</template>\n`;
 
-      if (dryRun ?? true) return jsonResult({ written: false, dryRun: true, path: file, content });
+      if (dryRun ?? true) return jsonResult({ written: false, dryRun: true, exists: alreadyExists, path: file, content });
+      if (alreadyExists) {
+        return jsonResult({ ok: false, written: false, exists: true, path: file, error: `Refusing to overwrite existing file: ${file}` });
+      }
       await fs.mkdir(path.dirname(file), { recursive: true });
       await fs.writeFile(file, content, 'utf8');
       return jsonResult({ written: true, path: file });
