@@ -12,6 +12,51 @@ import { promises as fs } from 'node:fs';
 import type { LayerInfo } from '../types.js';
 import { findConfigFile, parseConfigSource } from './config-reader.js';
 
+async function exists(dir: string): Promise<boolean> {
+  try {
+    await fs.access(dir);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function packageNameOf(spec: string): string | null {
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(spec)) return null;
+  if (spec.startsWith('@')) {
+    const [scope, name] = spec.split('/');
+    if (!scope || !name) return null;
+    return `${scope}/${name}`;
+  }
+  const name = spec.split('/')[0];
+  return name || null;
+}
+
+/** Resolve an extends entry to a directory, or null when it does not exist. */
+export async function resolveExtendEntry(fromDir: string, entry: string): Promise<string | null> {
+  const trimmed = entry.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('.') || path.isAbsolute(trimmed)) {
+    const abs = path.resolve(fromDir, trimmed);
+    return (await exists(abs)) ? abs : null;
+  }
+
+  const pkgName = packageNameOf(trimmed);
+  if (!pkgName) return null;
+  let dir = fromDir;
+  for (;;) {
+    const candidate = path.join(dir, 'node_modules', pkgName);
+    if (await exists(candidate)) {
+      const rest = trimmed.slice(pkgName.length).replace(/^\/+/, '');
+      const resolved = rest ? path.join(candidate, rest) : candidate;
+      return (await exists(resolved)) ? resolved : null;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 async function layerName(dir: string): Promise<string> {
   try {
     const raw = await fs.readFile(path.join(dir, 'package.json'), 'utf8');
@@ -58,7 +103,9 @@ async function resolveLayer(dir: string, counter: PriorityCounter, seen: Set<str
   };
 
   for (const entry of extendsEntries.slice().reverse()) {
-    const child = await resolveLayer(path.resolve(abs, entry), counter, seen);
+    const childDir = await resolveExtendEntry(abs, entry);
+    if (!childDir) continue;
+    const child = await resolveLayer(childDir, counter, seen);
     if (child) layer.children.push(child);
   }
 
@@ -93,7 +140,9 @@ export async function resolveLayers(root: string, extendsEntries: string[]): Pro
   };
 
   for (const entry of extendsEntries.slice().reverse()) {
-    const child = await resolveLayer(path.resolve(absRoot, entry), counter, seen);
+    const childDir = await resolveExtendEntry(absRoot, entry);
+    if (!childDir) continue;
+    const child = await resolveLayer(childDir, counter, seen);
     if (child) {
       rootLayer.children.push(child);
       appendTree(child);

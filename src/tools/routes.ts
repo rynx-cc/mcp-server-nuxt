@@ -1,13 +1,22 @@
 /**
  * Page route tools: list_routes, get_route, add_route.
  */
-import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { promises as fs } from 'node:fs';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { NuxtProjectContext } from '../context.js';
 import { jsonResult, safe } from '../utils/helpers.js';
 import { routePathToFile } from '../utils/nuxt-parser.js';
+import { prepareWrite } from '../utils/write-path.js';
+
+function jsSingleQuoted(value: string): string {
+  return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 export function registerRouteTools(server: McpServer, ctx: NuxtProjectContext): void {
   server.tool(
@@ -57,7 +66,7 @@ export function registerRouteTools(server: McpServer, ctx: NuxtProjectContext): 
 
   server.tool(
     'add_route',
-    'Scaffold a new page route under pages/ following Nuxt conventions. Supports static, dynamic (:id -> [id]), optional ([[id]]), and catch-all ([...slug]) segments.',
+    'Scaffold a new page route under the project pages directory (honoring srcDir) following Nuxt conventions. Supports static, dynamic (:id -> [id]), optional ([[id]]), optional catch-all ([[...slug]]), and catch-all ([...slug]) segments.',
     {
       path: z.string().describe('Route path, e.g. /users/:id or /about'),
       layout: z.string().optional().describe('Optional layout name to set in definePageMeta'),
@@ -68,19 +77,30 @@ export function registerRouteTools(server: McpServer, ctx: NuxtProjectContext): 
       const auth = ctx.writeGuard.authorize(dryRun ?? true);
       if (!auth.ok) return jsonResult(auth);
 
-      const rel = routePathToFile(routePath);
-      const inside = ctx.writeGuard.assertInsideProject(rel);
-      if (!inside.ok) return jsonResult(inside);
-      const file = inside.path;
+      const dirs = await ctx.sourceDirs();
+      const pagesName = path.basename(dirs.pagesDir);
+      const rel = routePathToFile(routePath, pagesName);
+      const prefix = `${pagesName}/`;
+      if (!rel.startsWith(prefix)) {
+        throw new Error(`Refusing to scaffold a page outside ${pagesName}/`);
+      }
+      const { file, exists: alreadyExists } = await prepareWrite(
+        ctx.root,
+        dirs.pagesDir,
+        path.resolve(dirs.pagesDir, rel.slice(prefix.length)),
+      );
       const meta: string[] = [];
-      if (layout) meta.push(`  layout: '${layout}'`);
+      if (layout) meta.push(`  layout: ${jsSingleQuoted(layout)}`);
       if (middleware && middleware.length > 0) {
-        meta.push(`  middleware: [${middleware.map((m) => `'${m}'`).join(', ')}]`);
+        meta.push(`  middleware: [${middleware.map((item) => jsSingleQuoted(item)).join(', ')}]`);
       }
       const metaBlock = meta.length > 0 ? `\ndefinePageMeta({\n${meta.join(',\n')}\n})` : '';
-      const content = `<script setup>${metaBlock}\n</script>\n\n<template>\n  <div>${routePath}</div>\n</template>\n`;
+      const content = `<script setup>${metaBlock}\n</script>\n\n<template>\n  <div>${escapeHtml(routePath)}</div>\n</template>\n`;
 
-      if (dryRun ?? true) return jsonResult({ written: false, dryRun: true, path: file, content });
+      if (dryRun ?? true) return jsonResult({ written: false, dryRun: true, exists: alreadyExists, path: file, content });
+      if (alreadyExists) {
+        return jsonResult({ ok: false, written: false, exists: true, path: file, error: `Refusing to overwrite existing file: ${file}` });
+      }
       await fs.mkdir(path.dirname(file), { recursive: true });
       await fs.writeFile(file, content, 'utf8');
       return jsonResult({ written: true, path: file });

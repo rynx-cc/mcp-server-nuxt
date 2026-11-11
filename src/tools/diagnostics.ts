@@ -19,6 +19,8 @@ export function registerDiagnosticTools(server: McpServer, ctx: NuxtProjectConte
         errors: result.diagnostics.filter((d) => d.severity === 'error').length,
         warnings: result.diagnostics.filter((d) => d.severity === 'warning').length,
         command: result.command,
+        reason: result.reason,
+        projects: result.projects,
         diagnostics: result.diagnostics,
       };
       if (!result.ran) {

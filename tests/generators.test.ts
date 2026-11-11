@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { promises as fs } from 'node:fs';
+import { promises as fs, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -13,8 +13,14 @@ import { routePathToFile, routePathToNitroFile } from '../src/utils/nuxt-parser.
 
 let base: string;
 
+function samePath(actual: unknown, expected: string): void {
+  // macOS temp dirs may appear as /var/... or /private/var/...
+  const norm = (p: string) => path.resolve(p).replace(/^\/private(\/var\/)/, '$1');
+  expect(norm(String(actual))).toBe(norm(expected));
+}
+
 beforeEach(async () => {
-  base = await fs.mkdtemp(path.join(os.tmpdir(), 'nuxt-generators-'));
+  base = realpathSync(await fs.mkdtemp(path.join(os.tmpdir(), 'nuxt-generators-')));
 });
 
 afterEach(async () => {
@@ -56,7 +62,7 @@ describe('generator tools', () => {
 
     const result = await callTool(server, 'add_route', { path: '/users/:id', layout: 'default', middleware: ['auth'] });
     expect(result.written).toBe(false);
-    expect(result.path).toBe(path.join(base, 'pages/users/[id].vue'));
+    samePath(result.path, path.join(base, 'pages/users/[id].vue'));
     expect(result.content).toContain("layout: 'default'");
     expect(result.content).toContain("middleware: ['auth']");
   });
@@ -68,7 +74,7 @@ describe('generator tools', () => {
 
     const result = await callTool(server, 'scaffold_nitro_api', { path: '/api/hello', method: 'post', zod: true });
     expect(result.written).toBe(false);
-    expect(result.path).toBe(path.join(base, 'server/api/hello.post.ts'));
+    samePath(result.path, path.join(base, 'server/api/hello.post.ts'));
     expect(result.content).toContain('defineEventHandler');
     expect(result.content).toContain('readValidatedBody');
   });
@@ -85,7 +91,7 @@ describe('generator tools', () => {
       slots: ['icon'],
     });
     expect(result.written).toBe(false);
-    expect(result.path).toBe(path.join(base, 'components/BaseButton.vue'));
+    samePath(result.path, path.join(base, 'components/BaseButton.vue'));
     expect(result.content).toContain('label: string');
     expect(result.content).toContain('click: []');
     expect(result.content).toContain('<slot name="icon" />');
@@ -109,7 +115,7 @@ describe('generator tools', () => {
 
     const result = await callTool(server, 'generate_composable', { name: 'counter', returns: '{ count: number }' });
     expect(result.written).toBe(false);
-    expect(result.path).toBe(path.join(base, 'composables/useCounter.ts'));
+    samePath(result.path, path.join(base, 'composables/useCounter.ts'));
     expect(result.content).toContain('export function useCounter()');
     expect(result.content).toContain('{ count: number }');
   });

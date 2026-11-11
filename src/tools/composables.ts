@@ -7,6 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { NuxtProjectContext } from '../context.js';
 import { jsonResult, safe } from '../utils/helpers.js';
+import { prepareWrite } from '../utils/write-path.js';
 
 export function registerComposableTools(server: McpServer, ctx: NuxtProjectContext): void {
   server.tool(
@@ -56,7 +57,7 @@ export function registerComposableTools(server: McpServer, ctx: NuxtProjectConte
 
   server.tool(
     'generate_composable',
-    'Generate a new composable under composables/ with a typed export. Names are normalized to useXxx.',
+    'Generate a new composable under the project composables directory (honoring srcDir) with a typed export. Names are normalized to useXxx.',
     {
       name: z.string().describe('Composable name, e.g. useCounter or counter'),
       returns: z.string().optional().describe('Optional return type annotation, e.g. { count: Ref<number> }'),
@@ -66,19 +67,25 @@ export function registerComposableTools(server: McpServer, ctx: NuxtProjectConte
       const auth = ctx.writeGuard.authorize(dryRun ?? true);
       if (!auth.ok) return jsonResult(auth);
 
-      const base = name.replace(/\.(ts|js)$/, '');
+      const base = name.replace(/\.(ts|js)$/i, '');
       const fnName = /^use[A-Z]/.test(base) ? base : `use${base.charAt(0).toUpperCase()}${base.slice(1)}`;
-      const rel = path.join('composables', `${fnName}.ts`);
-      const inside = ctx.writeGuard.assertInsideProject(rel);
-      if (!inside.ok) return jsonResult(inside);
+      const dirs = await ctx.sourceDirs();
+      const { file, exists: alreadyExists } = await prepareWrite(
+        ctx.root,
+        dirs.composablesDir,
+        path.resolve(dirs.composablesDir, `${fnName}.ts`),
+      );
 
       const ret = returns ? `: ${returns}` : '';
       const content = `export function ${fnName}()${ret} {\n  // TODO: implement\n  return {}\n}\n`;
 
-      if (dryRun ?? true) return jsonResult({ written: false, dryRun: true, path: inside.path, content });
-      await fs.mkdir(path.dirname(inside.path), { recursive: true });
-      await fs.writeFile(inside.path, content, 'utf8');
-      return jsonResult({ written: true, path: inside.path });
+      if (dryRun ?? true) return jsonResult({ written: false, dryRun: true, exists: alreadyExists, path: file, content });
+      if (alreadyExists) {
+        return jsonResult({ ok: false, written: false, exists: true, path: file, error: `Refusing to overwrite existing file: ${file}` });
+      }
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, content, 'utf8');
+      return jsonResult({ written: true, path: file });
     }),
   );
 }
