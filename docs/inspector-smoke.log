@@ -1,0 +1,10 @@
+MCP Nuxt Server v0.3.0 started for project: /Users/wzt/Desktop/clan/mcp-server-nuxt/tests/fixtures/nuxt3-minimal
+tools: 24
+overview ok: true
+overview snippet: {
+  "root": "/Users/wzt/Desktop/clan/mcp-server-nuxt/tests/fixtures/nuxt3-minimal",
+  "name": "fixture-nuxt3-minimal",
+  "framework": "Nuxt",
+  "nuxtVersion": "3.14.0",
+  "hasNuxtConfig": true,
+  "con
