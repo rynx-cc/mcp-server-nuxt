@@ -67,4 +67,23 @@ describe('update_config dry-run and guard', () => {
     expect(result.written).toBe(true);
     expect(await readConfig()).toContain('ssr: false');
   });
+
+  it('appends a new top-level key with a comma after the previous property', async () => {
+    await fs.writeFile(
+      path.join(base, 'nuxt.config.ts'),
+      "export default defineNuxtConfig({\n  compatibilityDate: '2025-07-15',\n  devtools: { enabled: true }\n})\n",
+      'utf8',
+    );
+    const ctx = new NuxtProjectContext(base, { allowWrites: true });
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerConfigTools(server, ctx);
+
+    const result = await callTool(server, 'update_config', { key: 'ssr', value: 'true', dryRun: false });
+    expect(result.written).toBe(true);
+    const source = await readConfig();
+    expect(source).toContain('devtools: { enabled: true },');
+    expect(source).toContain('ssr: true');
+    // Must remain parseable — no adjacent properties without a comma.
+    expect(source).not.toMatch(/\}\s*\nssr:/);
+  });
 });

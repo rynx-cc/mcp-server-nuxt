@@ -16,6 +16,7 @@
 - Missing `.nuxt` returns prepare hints instead of crashing
 - `loadNuxtConfig` via kit only when the target project has a local `nuxt` install (avoids hangs on bare fixtures)
 - Watcher disabled under Vitest so the process can exit
+- `update_config` / `add_nuxt_module` now insert a trailing comma before appending a new top-level key (was producing invalid `nuxt.config`)
 
 ### Docs
 - README: absolute paths, Claude Desktop / Cursor / VS Code samples, write-safety, architecture

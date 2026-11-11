@@ -22,7 +22,8 @@ export function registerDiagnosticTools(server: McpServer, ctx: NuxtProjectConte
         diagnostics: result.diagnostics,
       };
       if (!result.ran) {
-        payload.hint = 'Typecheck skipped. Run `nuxi prepare` so .nuxt/tsconfig.json exists, then retry.';
+        payload.hint =
+          'Typecheck skipped. Ensure `.nuxt/tsconfig.json` exists (`nuxi prepare`) and that `typescript` is installed in the project (or under node_modules).';
       }
       return jsonResult(payload);
     }),

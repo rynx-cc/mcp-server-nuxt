@@ -438,9 +438,20 @@ function findTopLevelAssignment(body: string, key: string): TopLevelAssignment |
   return null;
 }
 
+/** Ensure the last property in an object body ends with a comma before we append another. */
+function ensureTrailingComma(body: string): string {
+  const trimmed = body.replace(/\s+$/, '');
+  if (!trimmed) return trimmed;
+  let i = trimmed.length - 1;
+  while (i >= 0 && /\s/.test(trimmed[i]!)) i--;
+  if (i < 0) return trimmed;
+  if (trimmed[i] === ',') return trimmed;
+  return `${trimmed.slice(0, i + 1)},${trimmed.slice(i + 1)}`;
+}
+
 function insertBeforeClosing(body: string, line: string): string {
   const indent = detectIndent(body);
-  const trimmed = body.replace(/\s+$/, '');
+  const trimmed = ensureTrailingComma(body);
   return `${trimmed}\n${indent}${line}\n`;
 }
 
@@ -465,7 +476,7 @@ function setNestedKey(
   const inner = objMatch[1]!;
   const existing = findTopLevelAssignment(inner, parts[0]!);
   if (!existing) {
-    return `{${inner}\n  ${parts[0]}: ${expression},\n}`;
+    return `{${ensureTrailingComma(inner)}\n  ${parts[0]}: ${expression},\n}`;
   }
   if (parts.length === 1) {
     return `{${inner.replace(existing.fullMatch, `${parts[0]}: ${expression}`)}}`;
