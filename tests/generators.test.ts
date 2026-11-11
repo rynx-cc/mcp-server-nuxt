@@ -98,4 +98,66 @@ describe('generator tools', () => {
     expect(result.ok).toBe(false);
     expect(await fs.readdir(path.join(base, 'pages')).catch(() => [])).toEqual([]);
   });
+
+  it('refuses to write outside the project', async () => {
+    const ctx = new NuxtProjectContext(base, { allowWrites: true });
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerRouteTools(server, ctx);
+    registerComponentTools(server, ctx);
+    registerServerApiTools(server, ctx);
+
+    const outside = path.resolve(base, '..', 'escaped-page.vue');
+    const route = await callTool(server, 'add_route', { path: '/../../escaped-page', dryRun: false });
+    expect(route.error).toMatch(/outside/i);
+    expect(await fs.access(outside).then(() => true).catch(() => false)).toBe(false);
+
+    const component = await callTool(server, 'generate_component', { name: '/tmp/audit-pwned', dryRun: true });
+    expect(component.error).toMatch(/outside/i);
+
+    const api = await callTool(server, 'scaffold_nitro_api', { path: '/api/../../../tmp/pwned', method: 'get', dryRun: false });
+    expect(api.error).toMatch(/outside/i);
+  });
+
+  it('refuses to overwrite an existing page', async () => {
+    await fs.mkdir(path.join(base, 'pages'), { recursive: true });
+    await fs.writeFile(path.join(base, 'pages/about.vue'), '<template>keep</template>', 'utf8');
+    const ctx = new NuxtProjectContext(base, { allowWrites: true });
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerRouteTools(server, ctx);
+
+    const result = await callTool(server, 'add_route', { path: '/about', dryRun: false });
+    expect(result.written).toBe(false);
+    expect(result.exists).toBe(true);
+    expect(await fs.readFile(path.join(base, 'pages/about.vue'), 'utf8')).toContain('keep');
+  });
+
+  it('refuses to follow a pages symlink out of the project', async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'nuxt-escape-'));
+    try {
+      await fs.symlink(outside, path.join(base, 'pages'));
+      const ctx = new NuxtProjectContext(base, { allowWrites: true });
+      const server = new McpServer({ name: 'test', version: '0.0.0' });
+      registerRouteTools(server, ctx);
+
+      const result = await callTool(server, 'add_route', { path: '/about', dryRun: false });
+      expect(result.error).toMatch(/outside/i);
+      expect(await fs.readdir(outside)).toEqual([]);
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('writes a Nuxt 4 page under app/pages', async () => {
+    await fs.writeFile(path.join(base, 'package.json'), JSON.stringify({ dependencies: { nuxt: '^4.0.0' } }), 'utf8');
+    await fs.mkdir(path.join(base, 'app'), { recursive: true });
+    await fs.writeFile(path.join(base, 'app/app.vue'), '<template><NuxtPage /></template>', 'utf8');
+    const ctx = new NuxtProjectContext(base, { allowWrites: true });
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerRouteTools(server, ctx);
+
+    const result = await callTool(server, 'add_route', { path: '/pricing', dryRun: false });
+    expect(result.written).toBe(true);
+    expect(result.path).toBe(path.join(base, 'app/pages/pricing.vue'));
+    expect(await fs.readFile(path.join(base, 'app/pages/pricing.vue'), 'utf8')).toContain('/pricing');
+  });
 });

@@ -30,14 +30,14 @@ Without that context the model guesses. It invents import paths, misnames auto-i
 
 - **Config** calls `@nuxt/kit`'s `loadNuxtConfig` when that optional dependency loads, and otherwise parses `nuxt.config` from source.
 - **Auto-imports** read `.nuxt/imports.d.ts`, then `.nuxt/types/imports.d.ts`. **Generated types** return the raw `.nuxt/imports.d.ts` text, the `.nuxt/types/**/*.d.ts` file list, and `.nuxt/schema/nuxt.schema.json` when those files exist. **`check_type_errors`** runs `tsc --noEmit` against `.nuxt/tsconfig.json`, then the project `tsconfig.json`.
-- **`list_routes`, `list_components`, `list_composables`, and `list_server_routes`** scan source by convention. They glob `pages/**/*.vue`, `components/**/*.vue`, `composables/**` plus `utils/**`, and `server/{api,routes,middleware,plugins}/**`. Pages, components, and composables also scan `extends` layers. Server routes do not. None of these read Nuxt's resolved route table or `.nuxt/components.d.ts`.
+- **`list_routes`, `list_components`, `list_composables`, and `list_server_routes`** scan source by convention under the resolved `srcDir` (`pages/`, `components/`, `composables/`, `utils/`) and `serverDir` (`server/{api,routes,middleware,plugins}`). An explicit `srcDir` and Nuxt 4's `app/` directory are included. Pages, components, composables, and server routes also scan `extends` layers. None of these read Nuxt's resolved route table or `.nuxt/components.d.ts`.
 
 ### Design principles
 
 | Principle | What it means in code |
 | --- | --- |
 | Config via Nuxt Kit | `read_config` calls `loadNuxtConfig()` when `@nuxt/kit` loads, and parses `nuxt.config` from source when it does not |
-| Layer-aware scans | Resolves the `extends` graph and tags each scanned page route, component, and composable with its origin layer. Server routes are scanned in the app root only |
+| Layer-aware scans | Resolves the `extends` graph and tags each scanned page route, component, composable, and server route with its origin layer |
 | Auto-imports registry | Parses `.nuxt/imports.d.ts`, then `.nuxt/types/imports.d.ts`. Does not read `.nuxt/components.d.ts` |
 | Write protection | Mutation tools default to `dryRun: true`. A real write also needs writes enabled (`--allow-writes` or `MCP_NUXT_ALLOW_WRITES=1`) and `dryRun: false` |
 | Strict TypeScript | `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride` |
@@ -87,21 +87,22 @@ npm run build
 node dist/index.js /absolute/path/to/your/nuxt/app
 ```
 
-The first argument is the project path (`process.argv[2]`, or `"."` when that argument is missing). Put the path before any flag:
+The project path is optional and may appear before or after flags. When it is omitted, the current working directory is used:
 
 ```bash
-mcp-server-nuxt . --allow-writes
+mcp-server-nuxt /absolute/path/to/your/nuxt/app --allow-writes
+mcp-server-nuxt --allow-writes /absolute/path/to/your/nuxt/app
 ```
 
-A first argument of `--allow-writes` is used as the directory name. `--allow-writes` and `MCP_NUXT_ALLOW_WRITES=1` only authorize real writes. Mutation tools still default to `dryRun: true` until the caller passes `dryRun: false`. See [Write protection](#write-protection).
+`--allow-writes` and `MCP_NUXT_ALLOW_WRITES=1` only authorize real writes. Mutation tools still default to `dryRun: true` until the caller passes `dryRun: false`. See [Write protection](#write-protection).
 
 ---
 
 ## Nuxt compatibility
 
-`@nuxt/kit` is an optional dependency pinned to `^3.14.0` (`>=3.14.0 <4.0.0`). Config reads use that package's `loadNuxtConfig` when it loads. `@nuxt/kit` 4.x is outside the range, so this server does not claim Nuxt 4 support.
+`@nuxt/kit` is an optional dependency pinned to `^3.14.0` (`>=3.14.0 <4.0.0`). Config reads use that package's `loadNuxtConfig` when it loads. Kit 4 is outside the range, so a Nuxt 4 app falls back to the source parser when Kit 3 cannot load the config.
 
-Scans look for Nuxt 3 root directories: `pages/`, `components/`, `composables/`, `utils/`, and `server/`. A custom `srcDir`, Nuxt 4's default `app/` directory, and `components.dirs` are outside those globs.
+Scans honor an explicit `srcDir` and `serverDir`, and Nuxt 4's default `app/` directory (including Nuxt 3 with `future.compatibilityVersion: 4`). A Nuxt 3 app keeps the root layout unless that option or `srcDir` says otherwise. An `app/` directory that only contains `router.options.ts` or `spa-loading-template.html` does not become `srcDir` while the root still has `pages/`, `app.vue`, or the other v3 directories. Custom `components.dirs` are still not scanned.
 
 ---
 
@@ -210,7 +211,7 @@ Config, auto-imports, generated types, and `tsc` use `@nuxt/kit` and `.nuxt/` as
 | URI | Content |
 | --- | --- |
 | `nuxt://project/overview` | Project summary: Nuxt version, layers, directories, and route/component/composable/module counts |
-| `nuxt://project/routes` | Page routes from `pages/**/*.vue` in the project and `extends` layers: file, params, `definePageMeta` middleware and layout, children |
+| `nuxt://project/routes` | Page routes from the resolved pages directory in the project and `extends` layers: file, params, `definePageMeta` middleware and layout, children |
 | `nuxt://project/config` | Resolved `nuxt.config` object via `loadNuxtConfig`, with a source-level fallback |
 | `nuxt://project/modules` | Installed modules with status, source, and configuration |
 | `nuxt://project/layers` | `extends` hierarchy with override priority order and per-layer config |
@@ -219,7 +220,7 @@ Config, auto-imports, generated types, and `tsc` use `@nuxt/kit` and `.nuxt/` as
 
 ### Layers and auto-imports
 
-`nuxt://project/layers` resolves the `extends` graph and orders it by precedence (`project > later extends > earlier extends`). Page, component, and composable scans tag each file with its origin layer. They keep every match, so two layers that both define `components/BaseButton.vue` both appear.
+`nuxt://project/layers` resolves the `extends` graph and orders it by precedence (`project > later extends > earlier extends`). Relative paths and installed npm packages are resolved; missing entries are omitted. Page, component, composable, and server scans tag each file with its origin layer. They keep every match, so two layers that both define `components/BaseButton.vue` both appear.
 
 `nuxt://project/auto-imports` reads `.nuxt/imports.d.ts`, then `.nuxt/types/imports.d.ts` if the first file is missing. It returns symbols declared there, such as `ref`, `computed`, and `useFoo`, with their file origins and type signatures. It does not read `.nuxt/components.d.ts`, which is where component auto-imports usually live, so a component such as `BaseButton` is included only when that same symbol is also declared in `imports.d.ts`.
 
@@ -246,21 +247,21 @@ Aligned with the published `0.2.0` surface (22 tools).
 
 | Tool | Description |
 | --- | --- |
-| `list_routes` | File-based routes from `pages/**/*.vue` in the project and `extends` layers, including dynamic, optional, catch-all, and nested routes |
+| `list_routes` | File-based routes from the resolved pages directory in the project and `extends` layers, including dynamic, optional, catch-all, route groups, and nested routes |
 | `get_route` | One route by path, e.g. `/users/:id` |
-| `add_route` | Scaffold a page under `pages/` following Nuxt conventions |
+| `add_route` | Scaffold a page under the resolved pages directory (`pages/` or `app/pages/`) |
 | `inspect_route_meta` | `definePageMeta`, layout, middleware, and props/emits/slots for a page |
-| `list_server_routes` | `server/api`, `server/routes`, `server/middleware`, and `server/plugins` in the app root only (not layers). Every API and route entry gets the same list of `server/middleware/*` filenames, not a per-handler chain |
+| `list_server_routes` | `server/api`, `server/routes`, `server/middleware`, and `server/plugins` in the app and in `extends` layers (honoring `serverDir`). `type: "api"` includes both API and `server/routes` handlers. Every API and route entry gets the same list of that layer's `server/middleware/*` filenames, not a per-handler chain |
 | `scaffold_nitro_api` | Generate an H3 handler with optional Zod body validation |
 
 ### Components, composables, and auto-imports
 
 | Tool | Description |
 | --- | --- |
-| `list_components` | `components/**/*.vue` in the project and `extends` layers only. Skips `.nuxt/components.d.ts`, module-injected components (such as Nuxt UI), custom `srcDir`, and `components.dirs` |
+| `list_components` | `components/**/*.vue` under the resolved `srcDir` in the project and `extends` layers. Names follow Nuxt's prefix rule (`base/BaseButton.vue` → `BaseButton`). Skips `.nuxt/components.d.ts`, module-injected components (such as Nuxt UI), and custom `components.dirs` |
 | `inspect_component` | Props types, emits, slots, and `<script setup>` details |
 | `generate_component` | Generate a typed Vue SFC |
-| `list_composables` | Files under `composables/` and `utils/` in the project and `extends` layers. The auto-imported flag is a name/export heuristic, not the `.nuxt` registry |
+| `list_composables` | Named exports under `composables/` and `utils/` in the resolved `srcDir`, including `extends` layers. Named exports are marked auto-imported; this does not read the `.nuxt` registry |
 | `get_auto_imports` | Symbols from `.nuxt/imports.d.ts` or `.nuxt/types/imports.d.ts`, with source paths and signatures. Does not read `.nuxt/components.d.ts` |
 | `get_type_info` | Raw generated type info (`.nuxt/types`, schema) |
 
@@ -268,7 +269,7 @@ Aligned with the published `0.2.0` surface (22 tools).
 
 | Tool | Description |
 | --- | --- |
-| `check_type_errors` | Run `tsc --noEmit` against `.nuxt/tsconfig.json`, falling back to the project `tsconfig.json`. If `tsc` is not in the project's `node_modules`, or no tsconfig exists, returns `{ ran: false, diagnostics: [] }` — check `ran` before treating an empty `diagnostics` array as a clean result |
+| `check_type_errors` | Run `vue-tsc` (or `tsc`) `--noEmit` against `.nuxt/tsconfig.json`, falling back to the project `tsconfig.json`. Solution-style configs are expanded to their project references. If neither binary is installed, or no tsconfig exists, returns `{ ran: false, diagnostics: [], reason }` — check `ran` before treating an empty `diagnostics` array as a clean result |
 | `analyze_bundle_deps` | Classify Nuxt modules vs runtime/dev deps, flag missing or misplaced ones |
 | `search_code` | Search the codebase with line numbers and context lines |
 | `get_nuxt_docs` | Offline Nuxt guidance for routing, nitro, modules, layers |
@@ -283,7 +284,7 @@ Aligned with the published `0.2.0` surface (22 tools).
 2. A real write needs `dryRun: false` and a server started with writes enabled:
 
 ```bash
-# CLI flag (path first, then flag)
+# CLI flag, before or after the path
 mcp-server-nuxt /absolute/path/to/app --allow-writes
 
 # or environment variable
@@ -298,7 +299,8 @@ MCP_NUXT_ALLOW_WRITES=1 mcp-server-nuxt /absolute/path/to/app
 }
 ```
 
-3. Config edits touch only the affected lines. Comments and unrelated keys stay, and every change returns a diff you can review.
+3. Scaffolded files stay inside the project (`pages`, `components`, or `server/api` after `srcDir` / `serverDir` resolution). Paths that escape that directory are rejected, and an existing file is not overwritten.
+4. Config edits touch only the affected lines. Comments and unrelated keys stay, and every change returns a diff you can review.
 
 Dry-run first, check the diff, then enable writes.
 

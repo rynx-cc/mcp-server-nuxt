@@ -29,6 +29,7 @@ import type {
 import { resolveLayers } from './utils/layers.js';
 import { readAutoImports } from './utils/auto-imports.js';
 import { WriteGuard } from './utils/write-guard.js';
+import { resolveSourceDirs, type SourceDirs } from './utils/source-dirs.js';
 
 export interface ProjectSnapshot {
   routes: RouteInfo[];
@@ -46,6 +47,7 @@ export class NuxtProjectContext {
   private configCache: LoadedNuxtConfig | null = null;
   private snapshotCache: ProjectSnapshot | null = null;
   private layersCache: LayerInfo[] | null = null;
+  private sourceDirsCache: SourceDirs | null = null;
 
   constructor(root?: string, options: { allowWrites?: boolean } = {}) {
     this.root = path.resolve(root ?? detectProjectRoot(process.cwd()));
@@ -74,7 +76,7 @@ export class NuxtProjectContext {
         listPageRoutes(this.root, extraLayers),
         listComponents(this.root, extraLayers),
         listComposables(this.root, extraLayers),
-        listServerRoutes(this.root),
+        listServerRoutes(this.root, extraLayers),
         getNuxtVersion(this.root),
         listDirectories(this.root),
         isBuilt(this.root),
@@ -110,10 +112,17 @@ export class NuxtProjectContext {
     return this.snapshotCache;
   }
 
+  /** Resolved srcDir / serverDir / pages directory for this project. */
+  async sourceDirs(): Promise<SourceDirs> {
+    if (!this.sourceDirsCache) this.sourceDirsCache = await resolveSourceDirs(this.root);
+    return this.sourceDirsCache;
+  }
+
   async invalidate(): Promise<void> {
     this.snapshotCache = null;
     this.configCache = null;
     this.layersCache = null;
+    this.sourceDirsCache = null;
   }
 
   /** Resolve the Nuxt extends hierarchy (highest priority first). */

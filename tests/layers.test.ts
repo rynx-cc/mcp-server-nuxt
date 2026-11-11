@@ -76,12 +76,27 @@ describe('resolveLayers', () => {
     expect(layers[0]!.priority).toBe(0);
   });
 
-  it('deduplicates cyclic extends and falls back to dir basename', async () => {
-    await write(path.join(base, 'root/nuxt.config.ts'), "export default defineNuxtConfig({ extends: ['./self-layer'] })");
-    await write(path.join(base, 'self-layer/nuxt.config.ts'), "export default defineNuxtConfig({ extends: ['./nested'] })");
-    // No package.json for self-layer -> falls back to basename.
+  it('deduplicates cyclic extends, skips missing paths, and falls back to dir basename', async () => {
+    await write(
+      path.join(base, 'root/nuxt.config.ts'),
+      "export default defineNuxtConfig({ extends: ['./self-layer', './missing'] })",
+    );
+    await write(path.join(base, 'root/self-layer/nuxt.config.ts'), "export default defineNuxtConfig({ extends: ['..'] })");
 
-    const layers = await resolveLayers(path.join(base, 'root'), ['./self-layer']);
+    const layers = await resolveLayers(path.join(base, 'root'), ['./self-layer', './missing']);
     expect(layers.map((l) => l.name)).toEqual([path.basename(path.join(base, 'root')), 'self-layer']);
+    expect(layers.some((layer) => layer.name === 'missing')).toBe(false);
+  });
+
+  it('resolves an installed package layer and ignores a missing package', async () => {
+    const root = path.join(base, 'root');
+    await write(path.join(root, 'package.json'), JSON.stringify({ name: 'root-app' }));
+    await write(path.join(root, 'nuxt.config.ts'), "export default defineNuxtConfig({ extends: ['@sample/layer', '@missing/layer'] })");
+    await write(path.join(root, 'node_modules/@sample/layer/package.json'), JSON.stringify({ name: '@sample/layer' }));
+    await write(path.join(root, 'node_modules/@sample/layer/nuxt.config.ts'), 'export default defineNuxtConfig({})');
+
+    const layers = await resolveLayers(root, ['@sample/layer', '@missing/layer']);
+    expect(layers.map((layer) => layer.name)).toEqual(['root-app', '@sample/layer']);
+    expect(layers[1]!.cwd).toBe(path.join(root, 'node_modules/@sample/layer'));
   });
 });

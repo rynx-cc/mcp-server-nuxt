@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { resolve } from "node:path";
+import { parseCliArgs } from "./cli.js";
 import { setupServer } from "./server.js";
 
-const projectPath = resolve(process.cwd(), process.argv[2] || "."); // Default to current directory if no path provided
-const allowWrites = process.argv.includes("--allow-writes") || process.env.MCP_NUXT_ALLOW_WRITES === "1";
+let projectPath: string;
+let allowWrites: boolean;
+try {
+  ({ projectPath, allowWrites } = parseCliArgs(process.argv));
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
 
 async function main() {
   const server = new McpServer({

@@ -81,6 +81,8 @@ export interface ServerRouteInfo {
   kind: ServerRouteKind;
   /** Middleware chain for this route */
   middleware: string[];
+  /** Layer name this route originates from (undefined = project root) */
+  layer?: string;
 }
 
 export interface ComposableInfo {

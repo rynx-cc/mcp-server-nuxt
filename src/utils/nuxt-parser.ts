@@ -6,6 +6,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import fg from 'fast-glob';
+import { resolveSourceDirs } from './source-dirs.js';
 import type {
   ComposableInfo,
   ComponentInfo,
@@ -69,15 +70,6 @@ export async function exists(file: string): Promise<boolean> {
 /* Naming helpers                                                      */
 /* ------------------------------------------------------------------ */
 
-function pascalCase(segment: string): string {
-  return segment
-    .replace(/\.(vue|ts|js|mts|mjs|tsx|jsx)$/, '')
-    .split(/[-_.\s]+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join('');
-}
-
 /** Convert a file basename to camelCase, preserving the first word (e.g. use-my-counter -> useMyCounter). */
 function camelCase(segment: string): string {
   return segment
@@ -88,16 +80,77 @@ function camelCase(segment: string): string {
     .join('');
 }
 
+const GROUPING_FOLDER_RE = /^\(.*\)$/;
+
+/** Split a path segment the way Nuxt's component scanner splits names. */
+function splitByCase(input: string): string[] {
+  if (!input || input === '.') return [];
+  const parts: string[] = [];
+  for (const chunk of input.split(/[/_.\-\s]+/)) {
+    if (!chunk) continue;
+    const words = chunk.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+/g);
+    parts.push(...(words && words.length > 0 ? words : [chunk]));
+  }
+  return parts.filter(Boolean);
+}
+
+/**
+ * Nuxt drops a directory prefix when it repeats the start of the filename
+ * (`base/BaseButton.vue` → `BaseButton`). Grouping folders are ignored.
+ */
+function resolveComponentNameSegments(fileName: string, prefixParts: string[]): string[] {
+  const fileNameParts = splitByCase(fileName);
+  const fileNamePartsContent = fileNameParts.join('/').toLowerCase();
+  const componentPrefixParts = prefixParts.filter((part) => !GROUPING_FOLDER_RE.test(part.trim()));
+  const componentNameParts = componentPrefixParts.flatMap((part) => splitByCase(part));
+  let index = componentPrefixParts.length - 1;
+  const matchedSuffix: string[] = [];
+  while (index >= 0) {
+    const prefixPart = componentPrefixParts[index]!;
+    matchedSuffix.unshift(...splitByCase(prefixPart).map((part) => part.toLowerCase()));
+    const matchedSuffixContent = matchedSuffix.join('/');
+    if (
+      fileNamePartsContent === matchedSuffixContent ||
+      fileNamePartsContent.startsWith(`${matchedSuffixContent}/`) ||
+      (prefixPart.toLowerCase() === fileNamePartsContent && componentPrefixParts[index + 1] === prefixPart)
+    ) {
+      componentNameParts.length = index;
+    }
+    index--;
+  }
+  return [...componentNameParts, ...fileNameParts];
+}
+
+function pascalJoin(parts: string[]): string {
+  return parts
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join('');
+}
+
 /** Derive the auto-import name for a component under a components/ directory. */
 export function componentAutoImportName(relPath: string): string {
-  return relPath.split('/').map(pascalCase).join('');
+  const normalized = relPath.replace(/\\/g, '/').replace(/\.(vue|jsx|tsx)$/i, '');
+  const segments = normalized.split('/').filter((segment) => segment && segment !== '.');
+  const fileRaw = (segments.pop() ?? '').replace(/(?:\.(?:client|server))?(?:\.global|\.island)*$/i, '');
+  const fileName = fileRaw.toLowerCase() === 'index' ? '' : fileRaw;
+  const prefixParts = splitByCase(segments.filter((segment) => !GROUPING_FOLDER_RE.test(segment.trim())).join('/'));
+  return pascalJoin(resolveComponentNameSegments(fileName, prefixParts));
 }
 
 /* ------------------------------------------------------------------ */
 /* Route parsing                                                       */
 /* ------------------------------------------------------------------ */
 
-function convertDynamicSegment(segment: string): { path: string; param?: RouteParam } {
+function convertDynamicSegment(segment: string): { path: string; param?: RouteParam; omit?: boolean } {
+  // (group) route groups are omitted from the URL.
+  if (/^\([^)/]+\)$/.test(segment)) return { path: '', omit: true };
+  // [[...catchall]] -> optional catch-all. Checked before [[optional]].
+  const optionalCatchAll = segment.match(/^\[\[\.\.\.(.+)\]\]$/);
+  if (optionalCatchAll) {
+    const name = optionalCatchAll[1]!;
+    return { path: `:${name}(.*)*?`, param: { name, optional: true, catchAll: true } };
+  }
   // [[optional]] -> :optional?
   const optional = segment.match(/^\[\[(.+)\]\]$/);
   if (optional) {
@@ -124,7 +177,8 @@ export function fileToRoutePath(relPath: string): { path: string; params: RouteP
 
   for (const segment of segments) {
     if (segment === 'index') continue;
-    const { path: converted, param } = convertDynamicSegment(segment);
+    const { path: converted, param, omit } = convertDynamicSegment(segment);
+    if (omit || converted === '') continue;
     outSegments.push(converted);
     if (param) params.push(param);
   }
@@ -134,6 +188,8 @@ export function fileToRoutePath(relPath: string): { path: string; params: RouteP
 
 /** Convert a resolved route path segment back to its file-system form. */
 function routeSegmentToFile(segment: string): string {
+  const optionalCatchAll = segment.match(/^:(.+)\(\.\*\)\*\?$/);
+  if (optionalCatchAll) return `[[...${optionalCatchAll[1]}]]`;
   const optional = segment.match(/^:(.+)\?$/);
   if (optional) return `[[${optional[1]}]]`;
   const catchAll = segment.match(/^:(.+)\(\.\*\)\*$/);
@@ -144,11 +200,11 @@ function routeSegmentToFile(segment: string): string {
 }
 
 /** Inverse of `fileToRoutePath`: `/users/:id` -> `pages/users/[id].vue`. */
-export function routePathToFile(routePath: string): string {
+export function routePathToFile(routePath: string, pagesDir = 'pages'): string {
   const trimmed = routePath.replace(/^\/+|\/+$/g, '');
-  if (!trimmed) return 'pages/index.vue';
+  if (!trimmed) return `${pagesDir}/index.vue`;
   const segments = trimmed.split('/').map(routeSegmentToFile);
-  return 'pages/' + segments.join('/') + '.vue';
+  return `${pagesDir}/` + segments.join('/') + '.vue';
 }
 
 /** Convert an API path + method into a Nitro handler file: `/api/hello` + `get` -> `server/api/hello.get.ts`. */
@@ -199,25 +255,28 @@ export function extractPageMeta(content: string): {
 }
 
 async function listRoutesIn(scanRoot: string, layer?: string): Promise<RouteInfo[]> {
-  const files = await findFiles(scanRoot, ['pages/**/*.vue']);
-  const byPath = new Map<string, string>();
-
-  for (const file of files) {
-    const rel = relativePath(scanRoot, file).replace(/^pages\//, '');
-    byPath.set(fileToRoutePath(rel).path, file);
-  }
+  const dirs = await resolveSourceDirs(scanRoot);
+  if (!(await exists(dirs.pagesDir))) return [];
+  const files = await findFiles(dirs.pagesDir, ['**/*.vue']);
+  const rels = files.map((file) => relativePath(dirs.pagesDir, file));
 
   const routes: RouteInfo[] = [];
   for (const file of files) {
-    const rel = relativePath(scanRoot, file).replace(/^pages\//, '');
+    const rel = relativePath(dirs.pagesDir, file);
     const { path: routePath, params } = fileToRoutePath(rel);
     const content = (await readIfExists(file)) ?? '';
     const { meta, middleware, layout } = extractPageMeta(content);
 
-    // Detect nesting: a parent route `foo.vue` with `foo/bar.vue` children.
-    const children = [...byPath.keys()].filter(
-      (p) => p.startsWith(routePath === '/' ? '/' : routePath + '/') && p !== routePath,
-    );
+    // A non-index file `users.vue` is the parent of files under `users/`.
+    // `users/index.vue` is a sibling of `users/[id].vue`, and `/` is not the parent of every page.
+    const withoutExt = rel.replace(/\.vue$/, '');
+    const baseName = withoutExt.split('/').pop();
+    const children =
+      baseName && baseName !== 'index'
+        ? rels
+            .filter((other) => other !== rel && other.startsWith(`${withoutExt}/`))
+            .map((other) => fileToRoutePath(other).path)
+        : [];
 
     routes.push({
       path: routePath,
@@ -376,16 +435,19 @@ export async function listComponents(
   const seen = new Set<string>();
 
   for (const target of targets) {
-    const files = await findFiles(target.cwd, ['components/**/*.vue']);
+    const dirs = await resolveSourceDirs(target.cwd);
+    if (!(await exists(dirs.componentsDir))) continue;
+    const files = await findFiles(dirs.componentsDir, ['**/*.vue']);
     for (const file of files) {
       if (seen.has(file)) continue;
       seen.add(file);
-      const rel = relativePath(target.cwd, file);
-      const relFromComponents = rel.replace(/^components\//, '');
+      const relFromComponents = relativePath(dirs.componentsDir, file);
+      const name = componentAutoImportName(relFromComponents);
+      if (!name) continue;
       const { props, emits, slots } = await parseVueComponent(file);
       components.push({
-        name: componentAutoImportName(relFromComponents),
-        file: rel,
+        name,
+        file: relativePath(target.cwd, file),
         absolutePath: file,
         directory: 'components',
         props,
@@ -405,13 +467,44 @@ export async function listComponents(
 /* Composable parsing                                                  */
 /* ------------------------------------------------------------------ */
 
-async function parseComposable(file: string): Promise<{ parameters?: string; returnType?: string }> {
-  const content = (await readIfExists(file)) ?? '';
-  const fnMatch = content.match(/export\s+(?:async\s+)?function\s+([\w$]+)\s*\(([\s\S]*?)\)\s*(?::\s*([^{=]+))?\s*\{/);
-  if (!fnMatch) return {};
-  const params = fnMatch[2]!.trim();
-  const returnType = fnMatch[3]?.trim() ?? undefined;
-  return { parameters: params || undefined, returnType };
+interface NamedExport {
+  name: string;
+  parameters?: string;
+  returnType?: string;
+}
+
+/** Named exports Nuxt would auto-import from a composable or util file. */
+export function parseNamedExports(content: string): NamedExport[] {
+  const found: NamedExport[] = [];
+  const seen = new Set<string>();
+  const push = (item: NamedExport): void => {
+    if (!item.name || item.name === 'default' || seen.has(item.name)) return;
+    seen.add(item.name);
+    found.push(item);
+  };
+
+  for (const match of content.matchAll(
+    /export\s+(?:async\s+)?function\s+([\w$]+)\s*\(([^)]*)\)\s*(?::\s*([^{=]+))?\s*\{/g,
+  )) {
+    push({
+      name: match[1]!,
+      parameters: match[2]!.trim() || undefined,
+      returnType: match[3]?.trim(),
+    });
+  }
+  for (const match of content.matchAll(/export\s+(?:async\s+)?const\s+([\w$]+)/g)) {
+    push({ name: match[1]! });
+  }
+  for (const match of content.matchAll(/export\s*\{([^}]+)\}/g)) {
+    for (const raw of match[1]!.split(',')) {
+      const item = raw.trim();
+      if (!item || item.startsWith('type ')) continue;
+      const as = item.match(/^(?:type\s+)?([\w$]+)(?:\s+as\s+([\w$]+))?$/);
+      if (!as) continue;
+      push({ name: as[2] ?? as[1]! });
+    }
+  }
+  return found;
 }
 
 export async function listComposables(
@@ -423,29 +516,36 @@ export async function listComposables(
   const seen = new Set<string>();
 
   for (const target of targets) {
-    const files = await findFiles(target.cwd, ['composables/**/*.{ts,js,mts,mjs}', 'utils/**/*.{ts,js,mts,mjs}']);
-    for (const file of files) {
-      if (seen.has(file)) continue;
-      seen.add(file);
-      const rel = relativePath(target.cwd, file);
-      const dir = rel.startsWith('composables/') ? 'composables' : 'utils';
-      const basename = rel.split('/').pop() ?? '';
-      const name = camelCase(basename);
-      const { parameters, returnType } = await parseComposable(file);
-      const exported = (await readIfExists(file)) ?? '';
-      const isAutoImported =
-        /^use[A-Z]/.test(name) || /export\s+(?:default|const)\s+/.test(exported) || /\bautoImport\s*:\s*true/.test(exported);
-
-      composables.push({
-        name,
-        file: rel,
-        absolutePath: file,
-        parameters,
-        returnType,
-        autoImported: isAutoImported,
-        directory: dir,
-        layer: target.name,
-      });
+    const dirs = await resolveSourceDirs(target.cwd);
+    const groups: Array<{ dir: string; kind: 'composables' | 'utils' }> = [
+      { dir: dirs.composablesDir, kind: 'composables' },
+      { dir: dirs.utilsDir, kind: 'utils' },
+    ];
+    for (const group of groups) {
+      if (!(await exists(group.dir))) continue;
+      const files = await findFiles(group.dir, ['**/*.{ts,js,mts,mjs}'], ['**/*.d.ts', '**/*.d.mts', '**/*.d.cts']);
+      for (const file of files) {
+        if (seen.has(file)) continue;
+        seen.add(file);
+        const content = (await readIfExists(file)) ?? '';
+        const named = parseNamedExports(content);
+        const symbols =
+          named.length > 0
+            ? named.map((item) => ({ ...item, autoImported: true }))
+            : [{ name: camelCase(path.basename(file)), parameters: undefined, returnType: undefined, autoImported: false }];
+        for (const symbol of symbols) {
+          composables.push({
+            name: symbol.name,
+            file: relativePath(target.cwd, file),
+            absolutePath: file,
+            parameters: symbol.parameters,
+            returnType: symbol.returnType,
+            autoImported: symbol.autoImported,
+            directory: group.kind,
+            layer: target.name,
+          });
+        }
+      }
     }
   }
 
@@ -486,46 +586,66 @@ function nitroPathFromFile(rel: string): { path: string; method: string } {
   return { path: '/' + converted.join('/'), method };
 }
 
-export async function listServerRoutes(root: string): Promise<ServerRouteInfo[]> {
-  const files = await findFiles(root, [
-    'server/api/**/*.{ts,js,mts,mjs}',
-    'server/routes/**/*.{ts,js,mts,mjs}',
-    'server/middleware/**/*.{ts,js,mts,mjs}',
-    'server/plugins/**/*.{ts,js,mts,mjs}',
-  ]);
-
-  const globalMiddleware = files
-    .filter((f) => relativePath(root, f).startsWith('server/middleware/'))
-    .map((f) => relativePath(root, f).replace(/^server\/middleware\//, '').replace(/\.(ts|js|mts|mjs)$/, ''));
-
+export async function listServerRoutes(
+  root: string,
+  layers: Array<{ cwd: string; name: string }> = [],
+): Promise<ServerRouteInfo[]> {
+  const targets = [{ cwd: root, name: undefined as string | undefined }, ...layers.map((layer) => ({ cwd: layer.cwd, name: layer.name }))];
   const routes: ServerRouteInfo[] = [];
-  for (const file of files) {
-    const rel = relativePath(root, file);
-    let kind: ServerRouteKind;
-    let pathPrefix = '';
+  const seen = new Set<string>();
 
-    if (rel.startsWith('server/api/')) {
-      kind = 'api';
-      pathPrefix = '/api';
-    } else if (rel.startsWith('server/routes/')) {
-      kind = 'route';
-    } else if (rel.startsWith('server/middleware/')) {
-      kind = 'middleware';
-    } else {
-      kind = 'plugin';
+  for (const target of targets) {
+    const dirs = await resolveSourceDirs(target.cwd);
+    if (!(await exists(dirs.serverDir))) continue;
+    const files = await findFiles(
+      dirs.serverDir,
+      [
+        'api/**/*.{ts,js,mts,mjs}',
+        'routes/**/*.{ts,js,mts,mjs}',
+        'middleware/**/*.{ts,js,mts,mjs}',
+        'plugins/**/*.{ts,js,mts,mjs}',
+      ],
+      ['**/*.d.ts', '**/*.d.mts', '**/*.d.cts'],
+    );
+
+    const globalMiddleware = files
+      .filter((file) => relativePath(dirs.serverDir, file).startsWith('middleware/'))
+      .map((file) => relativePath(dirs.serverDir, file).replace(/^middleware\//, '').replace(/\.(ts|js|mts|mjs)$/, ''));
+
+    for (const file of files) {
+      if (seen.has(file)) continue;
+      seen.add(file);
+      const fromServer = relativePath(dirs.serverDir, file);
+      let kind: ServerRouteKind;
+      let pathPrefix = '';
+
+      if (fromServer.startsWith('api/')) {
+        kind = 'api';
+        pathPrefix = '/api';
+      } else if (fromServer.startsWith('routes/')) {
+        kind = 'route';
+      } else if (fromServer.startsWith('middleware/')) {
+        kind = 'middleware';
+      } else {
+        kind = 'plugin';
+      }
+
+      const inner = fromServer.replace(/^(api|routes|middleware|plugins)\//, '');
+      const { path: subPath, method } = nitroPathFromFile(inner);
+
+      routes.push({
+        path:
+          kind === 'middleware' || kind === 'plugin'
+            ? `(global: ${inner.replace(/\.(ts|js|mts|mjs)$/, '')})`
+            : pathPrefix + subPath,
+        file: relativePath(target.cwd, file),
+        absolutePath: file,
+        method: kind === 'api' || kind === 'route' ? method : '*',
+        kind,
+        middleware: kind === 'middleware' || kind === 'plugin' ? [] : globalMiddleware,
+        layer: target.name,
+      });
     }
-
-    const inner = rel.replace(/^server\/(api|routes|middleware|plugins)\//, '');
-    const { path: subPath, method } = nitroPathFromFile(inner);
-
-    routes.push({
-      path: kind === 'middleware' || kind === 'plugin' ? `(global: ${inner.replace(/\.(ts|js|mts|mjs)$/, '')})` : pathPrefix + subPath,
-      file: rel,
-      absolutePath: file,
-      method: kind === 'api' || kind === 'route' ? method : '*',
-      kind,
-      middleware: kind === 'middleware' || kind === 'plugin' ? [] : globalMiddleware,
-    });
   }
 
   return routes.sort((a, b) => a.path.localeCompare(b.path));
@@ -693,10 +813,30 @@ export async function getNuxtVersion(root: string): Promise<string | undefined> 
 }
 
 export async function listDirectories(root: string): Promise<string[]> {
-  const dirs = ['pages', 'components', 'composables', 'utils', 'server', 'layouts', 'middleware', 'plugins', 'assets', 'public', 'content', 'modules'];
+  const dirs = await resolveSourceDirs(root);
+  const candidates = [
+    dirs.pagesDir,
+    dirs.componentsDir,
+    dirs.composablesDir,
+    dirs.utilsDir,
+    dirs.layoutsDir,
+    dirs.middlewareDir,
+    dirs.pluginsDir,
+    path.join(dirs.srcDir, 'assets'),
+    dirs.serverDir,
+    path.join(root, 'public'),
+    path.join(root, 'content'),
+    path.join(root, 'modules'),
+    path.join(root, 'shared'),
+  ];
   const existing: string[] = [];
-  for (const dir of dirs) {
-    if (await exists(path.join(root, dir))) existing.push(dir);
+  const seen = new Set<string>();
+  for (const dir of candidates) {
+    if (!(await exists(dir))) continue;
+    const rel = relativePath(root, dir);
+    if (!rel || seen.has(rel)) continue;
+    seen.add(rel);
+    existing.push(rel);
   }
   return existing;
 }
@@ -757,8 +897,15 @@ export async function readTypeInfo(root: string): Promise<{
 
   const typesDir = path.join(root, '.nuxt', 'types');
   if (await exists(typesDir)) {
-    const files = await findFiles(root, ['.nuxt/types/**/*.d.ts']);
-    result.typesDir = files.map((f) => relativePath(root, f)).sort();
+    // findFiles ignores dot-directories and `.nuxt`, so list this tree directly.
+    const files = await fg(['.nuxt/types/**/*.d.ts'], {
+      cwd: root,
+      absolute: true,
+      onlyFiles: true,
+      dot: true,
+      ignore: ['**/node_modules/**'],
+    });
+    result.typesDir = files.map((file) => relativePath(root, file)).sort();
   }
 
   const schema = await readIfExists(path.join(root, '.nuxt', 'schema', 'nuxt.schema.json'));
