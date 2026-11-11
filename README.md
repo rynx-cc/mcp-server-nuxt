@@ -26,7 +26,7 @@ A generic AI agent looking at a Nuxt repo sees a directory tree. It does not see
 
 Without that context the model guesses. It invents import paths, misnames auto-imported components, and misreads layer precedence. The gap is between the source tree and Nuxt's resolved runtime state.
 
-`mcp-server-nuxt` exposes that resolved state through **22 tools** and **7 read-only resources** over MCP. It reads Nuxt's own output (`loadNuxtConfig`, `.nuxt/`) rather than guessing from filenames alone.
+`mcp-server-nuxt` exposes that resolved state through **24 tools** and **7 read-only resources** over MCP (core MVP: 15 tools / 5 resources — see [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md)). It reads Nuxt's own output (`loadNuxtConfig`, `.nuxt/`) rather than guessing from filenames alone.
 
 ### Design principles
 
@@ -76,14 +76,20 @@ The server speaks MCP over `stdio`; it is not a web service. MCP clients should 
 To run from a local checkout:
 
 ```bash
-git clone https://github.com/rynx-cc/nuxt-mcp-server.git
-cd nuxt-mcp-server
+git clone https://github.com/rynx-cc/mcp-server-nuxt.git
+cd mcp-server-nuxt
 npm install
 npm run build
-node dist/index.js /absolute/path/to/your/nuxt/app
+node dist/index.js --project /absolute/path/to/your/nuxt/app
 ```
 
-Omit the path to use the current directory. Pass `--allow-writes` **after** the path, or set `MCP_NUXT_ALLOW_WRITES=1`, to enable write tools. See [Write protection](#write-protection).
+```bash
+mcp-server-nuxt --help
+mcp-server-nuxt --version
+mcp-server-nuxt --project /absolute/path/to/app --allow-writes
+```
+
+Omit the path to use the current directory. Pass `--allow-writes`, or set `MCP_NUXT_ALLOW_WRITES=1`, to enable write tools. See [Write protection](#write-protection).
 
 ---
 
@@ -163,6 +169,21 @@ On Windows, if `npx` fails with `spawn npx ENOENT`, wrap it:
 
 Restart Claude Desktop after saving. Prefer forward slashes in Windows paths inside JSON.
 
+### VS Code (GitHub Copilot MCP)
+
+In `.vscode/mcp.json` (or user MCP settings):
+
+```json
+{
+  "servers": {
+    "mcp-server-nuxt": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-nuxt@latest", "--project", "/absolute/path/to/your/nuxt/app"]
+    }
+  }
+}
+```
+
 ---
 
 ## Core architecture and resources
@@ -174,7 +195,7 @@ The server exposes read-only resources (`resources/*`) for large, cacheable data
                       │           mcp-server-nuxt               │
                       │                                         │
   MCP client ───────► │  ┌──────────────┐   ┌───────────────┐   │
-  (Claude / Cursor)   │  │  22 Tools    │   │  7 Resources  │   │
+  (Claude / Cursor)   │  │  24 Tools    │   │  7 Resources  │   │
                       │  └──────┬───────┘   └───────┬───────┘   │
                       │         │                   │           │
                       │         ▼                   ▼           │
@@ -209,13 +230,14 @@ The server exposes read-only resources (`resources/*`) for large, cacheable data
 
 ## Tools reference
 
-Aligned with the published `0.2.0` surface (22 tools).
+Aligned with `0.3.0` (24 tools). Full mapping: [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md).
 
 ### Project and core
 
 | Tool | Description |
 | --- | --- |
 | `get_project_overview` | Summary: Nuxt version, layers, module/route/component counts, directories |
+| `analyze_project` | Health analysis with dependency warnings, pagination, and prepare hints |
 | `read_config` | Read the resolved `nuxt.config`, with dot-notation key filtering |
 | `update_config` | Update a config value, keep comments and formatting, return a diff |
 | `list_modules` | Active and inactive Nuxt modules with version, source, and config |
@@ -241,6 +263,7 @@ Aligned with the published `0.2.0` surface (22 tools).
 | `inspect_component` | Props types, emits, slots, and `<script setup>` details |
 | `generate_component` | Generate a typed Vue SFC |
 | `list_composables` | User-defined and auto-imported composables |
+| `generate_composable` | Scaffold a typed `useXxx` composable under `composables/` |
 | `get_auto_imports` | The `.nuxt/imports.d.ts` registry with source paths and signatures |
 | `get_type_info` | Raw generated type info (`.nuxt/types`, schema) |
 
@@ -289,8 +312,8 @@ Dry-run first, check the diff, then enable writes.
 Pull requests are welcome.
 
 ```bash
-git clone https://github.com/rynx-cc/nuxt-mcp-server.git
-cd nuxt-mcp-server
+git clone https://github.com/rynx-cc/mcp-server-nuxt.git
+cd mcp-server-nuxt
 npm install
 npm run typecheck   # tsc --noEmit (strict)
 npm test            # vitest

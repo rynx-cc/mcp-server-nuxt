@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: CLI smoke
+        run: |
+          node dist/index.js --version
+          node dist/index.js --help
+      - name: npm pack smoke
+        run: |
+          set -e
+          T=$(mktemp -d)
+          npm pack
+          TGZ=$(ls mcp-server-nuxt-*.tgz | head -1)
+          cd "$T"
+          npm init -y >/dev/null
+          npm install "$GITHUB_WORKSPACE/$TGZ"
+          npx mcp-server-nuxt --version
