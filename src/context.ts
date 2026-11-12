@@ -30,6 +30,11 @@ import { resolveLayers } from './utils/layers.js';
 import { readAutoImports } from './utils/auto-imports.js';
 import { WriteGuard } from './utils/write-guard.js';
 import { resolveSourceDirs, type SourceDirs } from './utils/source-dirs.js';
+import {
+  clearTypesGeneratorState,
+  ensureNuxtTypes,
+  type TypesArtifacts,
+} from './utils/types-generator.js';
 
 export interface ProjectSnapshot {
   routes: RouteInfo[];
@@ -48,6 +53,7 @@ export class NuxtProjectContext {
   private snapshotCache: ProjectSnapshot | null = null;
   private layersCache: LayerInfo[] | null = null;
   private sourceDirsCache: SourceDirs | null = null;
+  private typesCache: TypesArtifacts | null = null;
 
   constructor(root?: string, options: { allowWrites?: boolean } = {}) {
     this.root = path.resolve(root ?? detectProjectRoot(process.cwd()));
@@ -123,6 +129,22 @@ export class NuxtProjectContext {
     this.configCache = null;
     this.layersCache = null;
     this.sourceDirsCache = null;
+    this.typesCache = null;
+    clearTypesGeneratorState(this.root);
+  }
+
+  /**
+   * Ensure Nuxt type artifacts exist (project `.nuxt` or an external cache).
+   * Generates via @nuxt/kit loadNuxt → buildNuxt → writeTypes when missing.
+   */
+  async ensureTypes(options: { force?: boolean } = {}): Promise<TypesArtifacts> {
+    if (!options.force && this.typesCache?.typesDir) return this.typesCache;
+    const artifacts = await ensureNuxtTypes(this.root, {
+      allowWrites: this.writeGuard.allowWrites,
+      force: options.force,
+    });
+    this.typesCache = artifacts;
+    return artifacts;
   }
 
   /** Resolve the Nuxt extends hierarchy (highest priority first). */
@@ -135,14 +157,56 @@ export class NuxtProjectContext {
     return this.layersCache;
   }
 
-  /** Read type info (.nuxt/imports.d.ts, .nuxt/types, schema). */
-  async typeInfo(): Promise<Awaited<ReturnType<typeof readTypeInfo>>> {
-    return readTypeInfo(this.root);
+  /** Read type info from project `.nuxt` or an auto-generated cache. */
+  async typeInfo(): Promise<
+    Awaited<ReturnType<typeof readTypeInfo>> & {
+      source?: TypesArtifacts['source'];
+      generatedMs?: number;
+      error?: string;
+      hint?: string;
+    }
+  > {
+    const artifacts = await this.ensureTypes();
+    if (!artifacts.typesDir) {
+      return {
+        source: artifacts.source,
+        error: artifacts.error,
+        hint: artifacts.hint,
+      };
+    }
+    const info = await readTypeInfo(artifacts.typesDir, { projectRoot: this.root });
+    return {
+      ...info,
+      source: artifacts.source,
+      generatedMs: artifacts.generatedMs,
+    };
   }
 
-  /** Read the parsed auto-imports registry (requires .nuxt build output). */
-  async autoImports(): Promise<{ built: boolean; imports: AutoImportInfo[] }> {
-    return readAutoImports(this.root);
+  /** Read the parsed auto-imports registry (auto-generates types when needed). */
+  async autoImports(): Promise<{
+    built: boolean;
+    imports: AutoImportInfo[];
+    source?: TypesArtifacts['source'];
+    generatedMs?: number;
+    hint?: string;
+    error?: string;
+  }> {
+    const artifacts = await this.ensureTypes();
+    if (!artifacts.typesDir) {
+      return {
+        built: false,
+        imports: [],
+        source: artifacts.source,
+        error: artifacts.error,
+        hint: artifacts.hint,
+      };
+    }
+    const result = await readAutoImports(artifacts.typesDir);
+    return {
+      ...result,
+      source: artifacts.source,
+      generatedMs: artifacts.generatedMs,
+    };
   }
 
   private async projectName(): Promise<string> {

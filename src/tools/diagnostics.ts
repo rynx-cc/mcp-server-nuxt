@@ -11,21 +11,26 @@ import { analyzeBundleDeps, analyzeProject } from '../utils/nuxt-parser.js';
 export function registerDiagnosticTools(server: McpServer, ctx: NuxtProjectContext): void {
   server.tool(
     'check_type_errors',
-    'Run a TypeScript type check against .nuxt/tsconfig.json (or the project tsconfig.json) and return structured diagnostics with file, line, column, code and severity.',
+    'Run a TypeScript type check against Nuxt-generated tsconfig (auto-generated into a cache when `.nuxt` is missing) or the project tsconfig.json. Returns structured diagnostics with file, line, column, code and severity.',
     safe(async () => {
-      const result = await runTscCheck(ctx.root);
+      const artifacts = await ctx.ensureTypes();
+      const result = await runTscCheck(ctx.root, { typesDir: artifacts.typesDir });
       const payload: Record<string, unknown> = {
         ran: result.ran,
         errors: result.diagnostics.filter((d) => d.severity === 'error').length,
         warnings: result.diagnostics.filter((d) => d.severity === 'warning').length,
         command: result.command,
-        reason: result.reason,
+        reason: result.reason ?? artifacts.error,
         projects: result.projects,
         diagnostics: result.diagnostics,
+        typesRoot: artifacts.typesDir,
+        source: artifacts.source,
+        generatedMs: artifacts.generatedMs,
       };
       if (!result.ran) {
         payload.hint =
-          'Typecheck skipped. Ensure `.nuxt/tsconfig.json` exists (`nuxi prepare`) and that `typescript` is installed in the project (or under node_modules).';
+          artifacts.hint ??
+          'Typecheck skipped. Install typescript (or vue-tsc) in the project. Types are auto-generated when a local nuxt install is available.';
       }
       return jsonResult(payload);
     }),
@@ -41,7 +46,7 @@ export function registerDiagnosticTools(server: McpServer, ctx: NuxtProjectConte
 
   server.tool(
     'analyze_project',
-    'Analyze overall project health: overview counts, dependency warnings, component sample with pagination, and hints (e.g. run nuxi prepare when .nuxt is missing).',
+    'Analyze overall project health: overview counts, dependency warnings, component sample with pagination, and hints (e.g. type auto-generation when .nuxt is missing).',
     {
       limit: z.number().int().min(1).max(1000).optional().describe('Max component/package items (default 50)'),
       offset: z.number().int().min(0).optional().describe('Offset into the component list (default 0)'),

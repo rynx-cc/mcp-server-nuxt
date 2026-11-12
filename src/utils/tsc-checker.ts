@@ -123,17 +123,31 @@ function runChecker(cmd: string, args: string[], cwd: string): Promise<{ output:
   });
 }
 
-export async function runTscCheck(root: string): Promise<{
+export async function runTscCheck(
+  root: string,
+  options: { typesDir?: string | null } = {},
+): Promise<{
   ran: boolean;
   diagnostics: TscDiagnostic[];
   command?: string;
   reason?: string;
   projects?: string[];
 }> {
-  const tsconfigs = [path.join(root, '.nuxt', 'tsconfig.json'), path.join(root, 'tsconfig.json')];
+  const fromTypes = options.typesDir
+    ? [
+        path.join(options.typesDir, 'tsconfig.json'),
+        path.join(options.typesDir, 'tsconfig.app.json'),
+      ]
+    : [];
+  const tsconfigs = [
+    ...fromTypes,
+    path.join(root, '.nuxt', 'tsconfig.json'),
+    path.join(root, '.nuxt', 'tsconfig.app.json'),
+    path.join(root, 'tsconfig.json'),
+  ];
   const tsconfig = tsconfigs.find((file) => existsSync(file));
   if (!tsconfig) {
-    return { ran: false, diagnostics: [], reason: 'No tsconfig.json or .nuxt/tsconfig.json found.' };
+    return { ran: false, diagnostics: [], reason: 'No tsconfig.json or Nuxt-generated tsconfig found.' };
   }
 
   const checker = findChecker(root);

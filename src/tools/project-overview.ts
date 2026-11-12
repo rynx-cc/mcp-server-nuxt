@@ -11,15 +11,33 @@ export function registerOverviewTools(server: McpServer, ctx: NuxtProjectContext
     'Get a high-level overview of the Nuxt project: root, name, Nuxt version, config file, directory layout, layer list, and counts of routes, components, composables, server routes, middleware, plugins and modules.',
     safe(async () => {
       const { overview } = await ctx.snapshot();
+      if (!overview.built) {
+        return jsonResult({
+          ...overview,
+          hint:
+            'Project has no .nuxt directory yet. Type tools (get_type_info, check_type_errors, get_auto_imports) auto-generate types into a cache outside the project when a local nuxt install is available.',
+        });
+      }
       return jsonResult(overview);
     }),
   );
 
   server.tool(
     'get_type_info',
-    'Read generated Nuxt type information (.nuxt/imports.d.ts, .nuxt/types files and nuxt.schema.json) when the project has been built.',
+    'Read generated Nuxt type information (imports.d.ts, types/*, nuxt.schema.json). Auto-generates types into a cache when `.nuxt` is missing — no nuxi prepare required.',
     safe(async () => {
-      return jsonResult(await ctx.typeInfo());
+      const info = await ctx.typeInfo();
+      if (info.error && !info.importsDts) {
+        return jsonResult({
+          error: {
+            code: 'NOT_PREPARED',
+            message: info.error,
+            hint: info.hint,
+          },
+          source: info.source,
+        });
+      }
+      return jsonResult(info);
     }),
   );
 }

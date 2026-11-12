@@ -82,10 +82,19 @@ export function parseImportsDts(content: string): AutoImportInfo[] {
   return result;
 }
 
-export async function readAutoImports(root: string): Promise<{ built: boolean; imports: AutoImportInfo[] }> {
+/**
+ * Read auto-imports from a Nuxt buildDir (`typesRoot`), or from `<project>/.nuxt` when
+ * `typesRoot` is omitted (legacy).
+ */
+export async function readAutoImports(
+  typesRootOrProjectRoot: string,
+): Promise<{ built: boolean; imports: AutoImportInfo[] }> {
   const candidates = [
-    path.join(root, '.nuxt', 'imports.d.ts'),
-    path.join(root, '.nuxt', 'types', 'imports.d.ts'),
+    path.join(typesRootOrProjectRoot, 'imports.d.ts'),
+    path.join(typesRootOrProjectRoot, 'types', 'imports.d.ts'),
+    // Legacy: callers passed the project root before types auto-generation existed.
+    path.join(typesRootOrProjectRoot, '.nuxt', 'imports.d.ts'),
+    path.join(typesRootOrProjectRoot, '.nuxt', 'types', 'imports.d.ts'),
   ];
   for (const file of candidates) {
     const content = await readIfExists(file);

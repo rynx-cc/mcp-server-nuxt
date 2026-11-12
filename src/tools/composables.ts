@@ -29,19 +29,23 @@ export function registerComposableTools(server: McpServer, ctx: NuxtProjectConte
 
   server.tool(
     'get_auto_imports',
-    'Read the .nuxt/imports.d.ts auto-imports registry: every auto-imported symbol with its source path and type signature. Requires the project to have been prepared/built. Use this instead of guessing import paths or function signatures.',
+    'Read the auto-imports registry (imports.d.ts): every auto-imported symbol with its source path and type signature. Auto-generates types into a cache when `.nuxt` is missing.',
     {
       filter: z.string().optional().describe('Optional substring filter on the symbol name or source path'),
     },
     safe(async ({ filter }) => {
-      const { built, imports } = await ctx.autoImports();
+      const { built, imports, source, generatedMs, hint, error } = await ctx.autoImports();
       if (!built) {
         return jsonResult({
           built: false,
           count: 0,
           total: 0,
           imports: [],
-          hint: 'No .nuxt/imports.d.ts found. Run `nuxi prepare` (or `nuxi build`) to generate auto-import types.',
+          source,
+          error,
+          hint:
+            hint ??
+            'No auto-import types available. Install nuxt in the project so types can be auto-generated.',
         });
       }
       let filtered = imports;
@@ -51,7 +55,14 @@ export function registerComposableTools(server: McpServer, ctx: NuxtProjectConte
           (i) => i.name.toLowerCase().includes(needle) || i.source.toLowerCase().includes(needle),
         );
       }
-      return jsonResult({ built, count: filtered.length, total: imports.length, imports: filtered });
+      return jsonResult({
+        built,
+        count: filtered.length,
+        total: imports.length,
+        imports: filtered,
+        source,
+        generatedMs,
+      });
     }),
   );
 

@@ -886,29 +886,50 @@ export async function analyzeBundleDeps(root: string): Promise<{
   return { packages, warnings };
 }
 
-export async function readTypeInfo(root: string): Promise<{
+/**
+ * Read generated type artifacts from a Nuxt buildDir (project `.nuxt` or a cache dir).
+ * Accepts either the buildDir itself, or a project root that contains `.nuxt/`.
+ */
+export async function readTypeInfo(
+  typesRootOrProject: string,
+  options: { projectRoot?: string } = {},
+): Promise<{
   importsDts?: string;
   typesDir?: string[];
   schema?: string;
+  typesRoot?: string;
 }> {
-  const result: { importsDts?: string; typesDir?: string[]; schema?: string } = {};
-  const importsDts = await readIfExists(path.join(root, '.nuxt', 'imports.d.ts'));
+  let typesRoot = typesRootOrProject;
+  const directReady =
+    (await exists(path.join(typesRootOrProject, 'imports.d.ts'))) ||
+    (await exists(path.join(typesRootOrProject, 'tsconfig.json'))) ||
+    (await exists(path.join(typesRootOrProject, 'tsconfig.app.json')));
+  if (!directReady && (await exists(path.join(typesRootOrProject, '.nuxt')))) {
+    typesRoot = path.join(typesRootOrProject, '.nuxt');
+  }
+
+  const result: { importsDts?: string; typesDir?: string[]; schema?: string; typesRoot?: string } = {
+    typesRoot,
+  };
+  const importsDts =
+    (await readIfExists(path.join(typesRoot, 'imports.d.ts'))) ??
+    (await readIfExists(path.join(typesRoot, 'types', 'imports.d.ts')));
   if (importsDts) result.importsDts = importsDts;
 
-  const typesDir = path.join(root, '.nuxt', 'types');
-  if (await exists(typesDir)) {
-    // findFiles ignores dot-directories and `.nuxt`, so list this tree directly.
-    const files = await fg(['.nuxt/types/**/*.d.ts'], {
-      cwd: root,
+  const nestedTypes = path.join(typesRoot, 'types');
+  if (await exists(nestedTypes)) {
+    const files = await fg(['types/**/*.d.ts'], {
+      cwd: typesRoot,
       absolute: true,
       onlyFiles: true,
       dot: true,
       ignore: ['**/node_modules/**'],
     });
-    result.typesDir = files.map((file) => relativePath(root, file)).sort();
+    const base = options.projectRoot ?? typesRootOrProject;
+    result.typesDir = files.map((file) => relativePath(base, file)).sort();
   }
 
-  const schema = await readIfExists(path.join(root, '.nuxt', 'schema', 'nuxt.schema.json'));
+  const schema = await readIfExists(path.join(typesRoot, 'schema', 'nuxt.schema.json'));
   if (schema) result.schema = schema;
 
   return result;
@@ -937,7 +958,9 @@ export async function analyzeProject(
   const built = snapshot.overview.built;
   const hints: string[] = [];
   if (!built) {
-    hints.push('Project has no .nuxt directory. Run `nuxi prepare` (or `nuxi build`) for auto-imports and generated types.');
+    hints.push(
+      'Project has no .nuxt directory. Type tools (get_type_info, check_type_errors, get_auto_imports) auto-generate types into a cache outside the project when a local nuxt install is available — no need to run `nuxi prepare` first.',
+    );
   }
   if (!snapshot.overview.hasNuxtConfig) {
     hints.push('No nuxt.config.* found. Point the MCP server at a Nuxt project root.');

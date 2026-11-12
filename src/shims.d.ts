@@ -8,6 +8,11 @@ declare module '@nuxt/kit' {
 
   export function loadNuxt(options?: Record<string, unknown>): Promise<{
     apps?: Record<string, { pages?: unknown[] }>;
+    options: { buildDir: string; typesDir?: string; rootDir: string };
     close?: () => Promise<void>;
   }>;
+
+  export function buildNuxt(nuxt: unknown): Promise<unknown>;
+
+  export function writeTypes(nuxt: unknown): Promise<void>;
 }

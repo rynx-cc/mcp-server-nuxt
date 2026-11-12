@@ -6,7 +6,7 @@
  */
 import path from 'node:path';
 
-export const CLI_VERSION = '0.3.0';
+export const CLI_VERSION = '0.4.0';
 
 export interface CliOptions {
   projectPath: string;

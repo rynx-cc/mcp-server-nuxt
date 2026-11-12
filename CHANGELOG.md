@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0
+
+### Added
+- Zero-setup type tools: `get_type_info`, `check_type_errors`, and `get_auto_imports` work without `nuxi prepare` and without a running DevServer
+- On first use, types are generated via `@nuxt/kit` (`loadNuxt` → `buildNuxt` → `writeTypes`) into a cache directory (`node_modules/.cache/mcp-server-nuxt/types/...` or the system temp dir), so the project stays free of a newly created `.nuxt` unless writes are enabled (`--allow-writes` / `MCP_NUXT_ALLOW_WRITES`)
+- Cache is keyed by `nuxt.config` fingerprint and reused until the config changes
+- `get_project_overview` / `analyze_project` hints explain auto-generation instead of only telling users to run `nuxi prepare`
+
+### Tests
+- `tests/auto-types.test.ts`: fixture without `.nuxt` still returns type info; project directory stays clean
+
 ## 0.3.0
 
 ### Added

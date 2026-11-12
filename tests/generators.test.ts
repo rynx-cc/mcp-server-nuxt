@@ -133,7 +133,7 @@ describe('generator tools', () => {
     const result = await callTool(server, 'analyze_project', { limit: 10 });
     expect(result.built).toBe(false);
     expect(Array.isArray(result.hints)).toBe(true);
-    expect((result.hints as string[]).some((h) => h.includes('nuxi prepare'))).toBe(true);
+    expect((result.hints as string[]).some((h) => /auto-generate|nuxi prepare/i.test(h))).toBe(true);
     expect(result.name).toBe('fixture-analyze');
   });
 });

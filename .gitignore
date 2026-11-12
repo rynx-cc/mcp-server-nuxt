@@ -4,9 +4,11 @@ dist/
 .output/
 .coverage/
 *.log
+*.tgz
 .DS_Store
 .env
 .env.*
 !.env.example
 .cursor/
+tests/fixtures/**/package-lock.json
 tests/fixtures/large-components/components/
