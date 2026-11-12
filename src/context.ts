@@ -158,20 +158,32 @@ export class NuxtProjectContext {
   }
 
   /** Read type info from project `.nuxt` or an auto-generated cache. */
-  async typeInfo(): Promise<
-    Awaited<ReturnType<typeof readTypeInfo>> & {
-      source?: TypesArtifacts['source'];
-      generatedMs?: number;
-      error?: string;
-      hint?: string;
-    }
-  > {
+  async typeInfo(): Promise<{
+    importsDts?: string;
+    typesDir?: string[];
+    schema?: string;
+    typesRoot?: string | null;
+    source?: TypesArtifacts['source'];
+    generatedMs?: number;
+    error?: string;
+    hint?: string;
+    fallbackSummary?: { components: number; composables: number; routes: number };
+  }> {
     const artifacts = await this.ensureTypes();
     if (!artifacts.typesDir) {
+      const snap = await this.snapshot();
       return {
-        source: artifacts.source,
+        source: 'none',
+        typesRoot: null,
         error: artifacts.error,
-        hint: artifacts.hint,
+        hint:
+          artifacts.hint ??
+          'No generated Nuxt types available. Install nuxt locally so mcp-server-nuxt can run loadNuxt → buildNuxt → writeTypes into a cache, or run `nuxi prepare` once. Project source scan still works for routes/components/composables.',
+        fallbackSummary: {
+          components: snap.components.length,
+          composables: snap.composables.length,
+          routes: snap.routes.length,
+        },
       };
     }
     const info = await readTypeInfo(artifacts.typesDir, { projectRoot: this.root });
@@ -193,12 +205,16 @@ export class NuxtProjectContext {
   }> {
     const artifacts = await this.ensureTypes();
     if (!artifacts.typesDir) {
+      const { buildFallbackAutoImports } = await import('./utils/fallback-imports.js');
+      const snap = await this.snapshot();
+      const imports = buildFallbackAutoImports(snap.components, snap.composables);
       return {
-        built: false,
-        imports: [],
-        source: artifacts.source,
+        built: true,
+        imports,
+        source: 'fallback',
         error: artifacts.error,
-        hint: artifacts.hint,
+        hint:
+          'No local nuxt types cache. Returning a fallback registry from scanned components/composables plus common Nuxt builtins. Install nuxt for full generated imports.d.ts.',
       };
     }
     const result = await readAutoImports(artifacts.typesDir);

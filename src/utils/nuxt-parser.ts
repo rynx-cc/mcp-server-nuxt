@@ -959,7 +959,7 @@ export async function analyzeProject(
   const hints: string[] = [];
   if (!built) {
     hints.push(
-      'Project has no .nuxt directory. Type tools (get_type_info, check_type_errors, get_auto_imports) auto-generate types into a cache outside the project when a local nuxt install is available — no need to run `nuxi prepare` first.',
+      'No project `.nuxt` directory (optional, not an error). Type tools auto-generate into a cache when nuxt is installed, or fall back to a scanned auto-imports registry.',
     );
   }
   if (!snapshot.overview.hasNuxtConfig) {

@@ -12,7 +12,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { findConfigFile } from './config-reader.js';
 
-export type TypesSource = 'project' | 'cache' | 'generated' | 'none';
+export type TypesSource = 'project' | 'cache' | 'generated' | 'fallback' | 'none';
 
 export interface TypesArtifacts {
   /** Absolute directory that contains imports.d.ts / tsconfig.json (buildDir). */
@@ -64,22 +64,24 @@ function cacheTypesReady(dir: string): boolean {
   );
 }
 
-export async function configFingerprint(projectRoot: string): Promise<string> {
-  const configPath = findConfigFile(projectRoot);
-  const hash = createHash('sha1').update(projectRoot).update('\0');
-  if (configPath) {
-    hash.update(configPath);
-    try {
-      const st = await fs.stat(configPath);
-      hash.update(String(st.mtimeMs)).update(String(st.size));
-      const body = await fs.readFile(configPath, 'utf8');
-      hash.update(body);
-    } catch {
-      hash.update('missing-config-stat');
-    }
-  } else {
-    hash.update('no-config');
+async function hashFile(hash: ReturnType<typeof createHash>, file: string, label: string): Promise<void> {
+  hash.update(label).update('\0').update(file).update('\0');
+  try {
+    const st = await fs.stat(file);
+    hash.update(String(st.mtimeMs)).update(String(st.size));
+    hash.update(await fs.readFile(file, 'utf8'));
+  } catch {
+    hash.update(`missing:${label}`);
   }
+}
+
+/** Fingerprint of nuxt.config.* + package.json so dep/config edits invalidate the cache. */
+export async function configFingerprint(projectRoot: string): Promise<string> {
+  const hash = createHash('sha1').update(projectRoot).update('\0');
+  const configPath = findConfigFile(projectRoot);
+  if (configPath) await hashFile(hash, configPath, 'nuxt.config');
+  else hash.update('no-config');
+  await hashFile(hash, path.join(projectRoot, 'package.json'), 'package.json');
   return hash.digest('hex');
 }
 

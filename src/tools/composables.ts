@@ -35,19 +35,6 @@ export function registerComposableTools(server: McpServer, ctx: NuxtProjectConte
     },
     safe(async ({ filter }) => {
       const { built, imports, source, generatedMs, hint, error } = await ctx.autoImports();
-      if (!built) {
-        return jsonResult({
-          built: false,
-          count: 0,
-          total: 0,
-          imports: [],
-          source,
-          error,
-          hint:
-            hint ??
-            'No auto-import types available. Install nuxt in the project so types can be auto-generated.',
-        });
-      }
       let filtered = imports;
       if (filter) {
         const needle = filter.toLowerCase();
@@ -55,14 +42,21 @@ export function registerComposableTools(server: McpServer, ctx: NuxtProjectConte
           (i) => i.name.toLowerCase().includes(needle) || i.source.toLowerCase().includes(needle),
         );
       }
-      return jsonResult({
+      const payload: Record<string, unknown> = {
         built,
         count: filtered.length,
         total: imports.length,
         imports: filtered,
         source,
         generatedMs,
-      });
+      };
+      if (source === 'fallback' || !built) {
+        payload.hint =
+          hint ??
+          'Fallback or empty auto-imports registry. Install nuxt for full generated imports.d.ts.';
+        if (error) payload.error = error;
+      }
+      return jsonResult(payload);
     }),
   );
 

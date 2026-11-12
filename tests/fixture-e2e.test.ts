@@ -100,18 +100,23 @@ describe('fixture e2e — readonly tools', () => {
     });
   });
 
-  it('no-prepare: returns structured prepare hint, does not crash', async () => {
+  it('no-prepare: fallback auto-imports and clear type hints, does not crash', async () => {
     await withFixture('no-prepare', async (server) => {
       const overview = await callTool(server, 'get_project_overview');
       expect(overview.built).toBe(false);
+      expect(String(overview.hint ?? '')).toMatch(/optional|cache|fallback/i);
 
       const auto = await callTool(server, 'get_auto_imports');
-      expect(auto.built).toBe(false);
-      expect(String(auto.hint ?? '') + String(auto.error ?? '')).toMatch(/nuxt|auto-generat|prepare/i);
+      expect(auto.source).toBe('fallback');
+      expect((auto.count as number) > 0).toBe(true);
+
+      const typeInfo = await callTool(server, 'get_type_info');
+      expect(typeInfo).not.toEqual({});
+      expect(typeof typeInfo.hint === 'string' && (typeInfo.hint as string).length > 0).toBe(true);
 
       const analysis = await callTool(server, 'analyze_project');
       expect(analysis.built).toBe(false);
-      expect(((analysis.hints as string[]) ?? []).some((h) => /auto-generate|nuxi prepare/i.test(h))).toBe(true);
+      expect(((analysis.hints as string[]) ?? []).some((h) => /optional|fallback|auto-generate/i.test(h))).toBe(true);
 
       for (const name of READONLY_TOOLS) {
         const result = await callTool(server, name, name === 'get_route' ? { path: '/' } : name === 'inspect_component' ? { name: 'Missing' } : name === 'search_code' ? { query: 'unprepared' } : {});

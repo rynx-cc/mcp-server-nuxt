@@ -15,7 +15,7 @@ export function registerOverviewTools(server: McpServer, ctx: NuxtProjectContext
         return jsonResult({
           ...overview,
           hint:
-            'Project has no .nuxt directory yet. Type tools (get_type_info, check_type_errors, get_auto_imports) auto-generate types into a cache outside the project when a local nuxt install is available.',
+            'No project `.nuxt` directory (optional). Listing tools use source scan; type tools auto-generate into a cache when nuxt is installed, or fall back to a scanned registry.',
         });
       }
       return jsonResult(overview);
@@ -27,14 +27,21 @@ export function registerOverviewTools(server: McpServer, ctx: NuxtProjectContext
     'Read generated Nuxt type information (imports.d.ts, types/*, nuxt.schema.json). Auto-generates types into a cache when `.nuxt` is missing — no nuxi prepare required.',
     safe(async () => {
       const info = await ctx.typeInfo();
-      if (info.error && !info.importsDts) {
+      // Always return a useful payload — never bare {}.
+      if (!info.importsDts) {
         return jsonResult({
-          error: {
-            code: 'NOT_PREPARED',
-            message: info.error,
-            hint: info.hint,
-          },
-          source: info.source,
+          source: info.source ?? 'none',
+          typesRoot: info.typesRoot ?? null,
+          importsDts: null,
+          typesDir: info.typesDir ?? [],
+          schema: info.schema ?? null,
+          error: info.error
+            ? { code: 'NOT_PREPARED', message: info.error, hint: info.hint }
+            : undefined,
+          hint:
+            info.hint ??
+            'No generated type declarations found. Install nuxt to enable auto type generation, or run `nuxi prepare`.',
+          fallbackSummary: info.fallbackSummary,
         });
       }
       return jsonResult(info);

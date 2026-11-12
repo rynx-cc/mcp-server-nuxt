@@ -27,11 +27,23 @@ export function registerDiagnosticTools(server: McpServer, ctx: NuxtProjectConte
         source: artifacts.source,
         generatedMs: artifacts.generatedMs,
       };
+      const hints: string[] = [];
       if (!result.ran) {
-        payload.hint =
+        hints.push(
           artifacts.hint ??
-          'Typecheck skipped. Install typescript (or vue-tsc) in the project. Types are auto-generated when a local nuxt install is available.';
+            'Typecheck skipped. Install typescript (or vue-tsc) in the project. Types are auto-generated when a local nuxt install is available.',
+        );
       }
+      if (artifacts.source === 'none') {
+        hints.push(
+          'No Nuxt-generated tsconfig was available; results (if any) use the project tsconfig only and may miss Nuxt aliases/auto-imports.',
+        );
+      } else if (artifacts.source === 'generated' || artifacts.source === 'cache') {
+        hints.push(
+          'Typecheck uses an mcp-server-nuxt cache of Nuxt types (not necessarily a project `.nuxt` from `nuxi prepare`). Treat diagnostics as advisory if paths look unexpected.',
+        );
+      }
+      if (hints.length) payload.hint = hints.join(' ');
       return jsonResult(payload);
     }),
   );

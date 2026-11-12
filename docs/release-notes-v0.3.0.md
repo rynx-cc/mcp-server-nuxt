@@ -32,16 +32,16 @@ Also restored/expanded in this release: pagination on large list tools, CLI entr
 
 ## Fixes
 
-- `list_routes` / listing resolve Nuxt pages dirs (`srcDir`, `dir.pages`, `app/pages`) with optional `@nuxt/kit` `loadNuxt` when available; file scan is the fallback
+- `list_routes` / listing resolve Nuxt pages dirs via `resolveSourceDirs` + file scan (`srcDir`, `dir.pages`, `app/pages`)
+- Config reading uses `@nuxt/kit` `loadNuxtConfig` when a local `nuxt` install is present; otherwise a source-level parse
 - Missing `.nuxt` returns prepare hints instead of crashing
-- `loadNuxtConfig` via kit only when the target project has a local `nuxt` install (avoids hangs on bare fixtures)
 - Watcher disabled under Vitest so the process can exit
 - Config appends no longer produce invalid trailing-comma-less `nuxt.config`
 
 ## Known issues
 
 - `@nuxt/kit` `loadNuxtConfig` only runs when the target project has a local `nuxt` install; otherwise source-level parsing is used
-- Auto-imports / some type tools are richer after `nuxi prepare` (when `.nuxt/` exists); other tools still work from source scan
+- Auto-imports / type tools are richer after prepare or (in 0.4.0+) auto type generation; other tools still work from source scan
 - File watcher is disabled under Vitest so the process can exit cleanly
 
 ## Links

@@ -1,18 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CLI_VERSION } from '../src/cli.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const entry = path.join(root, 'dist', 'index.js');
 const hasDist = existsSync(entry);
+const pkgVersion = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version as string;
+
+describe('CLI_VERSION', () => {
+  it('matches package.json version', () => {
+    expect(CLI_VERSION).toBe(pkgVersion);
+  });
+});
 
 describe.skipIf(!hasDist)('CLI flags', () => {
-  it('--version prints version on stderr', () => {
+  it('--version prints package.json version on stderr', () => {
     const result = spawnSync(process.execPath, [entry, '--version'], { encoding: 'utf8' });
     expect(result.status).toBe(0);
-    expect(result.stderr.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(result.stderr.trim()).toBe(pkgVersion);
   });
 
   it('--help prints usage', () => {

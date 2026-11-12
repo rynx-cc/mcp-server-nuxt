@@ -4,9 +4,31 @@
  * The project path is optional and may appear before or after flags.
  * `--allow-writes` is never treated as a directory name.
  */
+import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export const CLI_VERSION = '0.4.0';
+function readPackageVersion(): string {
+  try {
+    const require = createRequire(import.meta.url);
+    // From src/cli.ts → ../package.json; from dist/index.js → ../package.json
+    const pkg = require('../package.json') as { version?: string };
+    if (pkg.version) return pkg.version;
+  } catch {
+    /* fall through */
+  }
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const require = createRequire(import.meta.url);
+    const pkg = require(path.join(here, '..', 'package.json')) as { version?: string };
+    if (pkg.version) return pkg.version;
+  } catch {
+    /* fall through */
+  }
+  return '0.0.0';
+}
+
+export const CLI_VERSION = readPackageVersion();
 
 export interface CliOptions {
   projectPath: string;

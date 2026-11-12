@@ -236,6 +236,36 @@ In `.vscode/mcp.json` (or user MCP settings):
 }
 ```
 
+### Claude Code
+
+Add an MCP server in Claude Code settings (or project `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "mcp-server-nuxt": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
+    }
+  }
+}
+```
+
+### Windsurf
+
+In Windsurf MCP settings (Cascade → MCP), add:
+
+```json
+{
+  "mcpServers": {
+    "mcp-server-nuxt": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
+    }
+  }
+}
+```
+
 ---
 
 ## Core architecture and resources
