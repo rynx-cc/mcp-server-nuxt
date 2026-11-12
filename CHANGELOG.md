@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- `list_components` and `inspect_component` honor `components` (`dirs`, array entries, `prefix`, `pathPrefix: false`, `extensions`, `global`) and resolve `~`, `@`, `~~`, and `@@` from srcDir/rootDir, including layers. Names follow Nuxt's prefix and repeated-segment rules. `.nuxt/components.d.ts` is used when it lists components. Unresolved paths are skipped with a warning instead of a guessed name
+
 ## 0.4.1
 
 ### Added

@@ -5,10 +5,10 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { detectProjectRoot, loadNuxtConfig, type LoadedNuxtConfig } from './utils/config-reader.js';
+import { scanComponents } from './utils/component-scan.js';
 import {
   getNuxtVersion,
   isBuilt,
-  listComponents,
   listComposables,
   listDirectories,
   listModules,
@@ -43,6 +43,8 @@ export interface ProjectSnapshot {
   serverRoutes: ServerRouteInfo[];
   modules: ModuleInfo[];
   overview: ProjectOverview;
+  /** Unresolved component dirs or `.nuxt/components.d.ts` entries. */
+  componentWarnings: string[];
 }
 
 export class NuxtProjectContext {
@@ -77,16 +79,17 @@ export class NuxtProjectContext {
     const layers = await this.layers();
     const extraLayers = layers.slice(1).map((l) => ({ cwd: l.cwd, name: l.name }));
 
-    const [routes, components, composables, serverRoutes, nuxtVersion, directories, built] =
+    const [routes, componentScan, composables, serverRoutes, nuxtVersion, directories, built] =
       await Promise.all([
         listPageRoutes(this.root, extraLayers),
-        listComponents(this.root, extraLayers),
+        scanComponents(this.root, extraLayers),
         listComposables(this.root, extraLayers),
         listServerRoutes(this.root, extraLayers),
         getNuxtVersion(this.root),
         listDirectories(this.root),
         isBuilt(this.root),
       ]);
+    const components = componentScan.components;
 
     const modules = await listModules(this.root, config.value);
     const name = await this.projectName();
@@ -114,7 +117,15 @@ export class NuxtProjectContext {
       built,
     };
 
-    this.snapshotCache = { routes, components, composables, serverRoutes, modules, overview };
+    this.snapshotCache = {
+      routes,
+      components,
+      composables,
+      serverRoutes,
+      modules,
+      overview,
+      componentWarnings: componentScan.warnings,
+    };
     return this.snapshotCache;
   }
 

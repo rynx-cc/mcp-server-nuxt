@@ -12,7 +12,7 @@ import { prepareWrite } from '../utils/write-path.js';
 export function registerComponentTools(server: McpServer, ctx: NuxtProjectContext): void {
   server.tool(
     'list_components',
-    'List all Vue components with their auto-imported names, file paths, props, emits and slots. Use this to discover existing UI building blocks before writing new code.',
+    'List Vue components using .nuxt/components.d.ts when it exists, otherwise the components config (dirs, prefix, pathPrefix, extensions, aliases). Includes props, emits, and slots.',
     {
       name: z.string().optional().describe('Optional substring filter on component name'),
       directory: z.string().optional().describe('Optional directory filter (e.g. components)'),
@@ -20,8 +20,8 @@ export function registerComponentTools(server: McpServer, ctx: NuxtProjectContex
       offset: z.number().int().min(0).optional().describe('Number of results to skip (default 0)'),
     },
     safe(async ({ name, directory, limit, offset }) => {
-      const { components } = await ctx.snapshot();
-      let filtered = components;
+      const snap = await ctx.snapshot();
+      let filtered = snap.components;
       if (name) filtered = filtered.filter((c) => c.name.toLowerCase().includes(name.toLowerCase()));
       if (directory) filtered = filtered.filter((c) => c.directory === directory);
       const page = paginate(filtered, limit ?? 200, offset ?? 0);
@@ -31,6 +31,7 @@ export function registerComponentTools(server: McpServer, ctx: NuxtProjectContex
         limit: page.limit,
         offset: page.offset,
         truncated: page.truncated,
+        warnings: snap.componentWarnings,
         components: page.items,
       });
     }),
@@ -38,7 +39,7 @@ export function registerComponentTools(server: McpServer, ctx: NuxtProjectContex
 
   server.tool(
     'inspect_component',
-    'Get detailed information about a single component by its auto-imported name (e.g. BaseButton): props types, slots, emits, and script setup details.',
+    'Get one component by the auto-imported name Nuxt would generate (prefix, path segments, and components.d.ts). Returns props, slots, and emits.',
     {
       name: z.string().describe('Auto-imported component name, e.g. BaseButton'),
     },

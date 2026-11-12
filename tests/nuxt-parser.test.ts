@@ -78,5 +78,9 @@ describe('componentAutoImportName', () => {
     expect(componentAutoImportName('ui/form-input.vue')).toBe('UiFormInput');
     expect(componentAutoImportName('button/index.vue')).toBe('Button');
     expect(componentAutoImportName('(marketing)/Hero.vue')).toBe('Hero');
+    expect(componentAutoImportName('base/Button.vue', { pathPrefix: false })).toBe('Button');
+    expect(componentAutoImportName('Button.vue', { prefix: 'Special' })).toBe('SpecialButton');
+    expect(componentAutoImportName('BaseButton.vue', { prefix: 'Base' })).toBe('BaseButton');
+    expect(componentAutoImportName('button/index.vue', { pathPrefix: false })).toBe('Button');
   });
 });

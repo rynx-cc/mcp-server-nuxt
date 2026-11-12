@@ -51,6 +51,8 @@ export interface ComponentInfo {
   emits: string[];
   slots: string[];
   autoImported: boolean;
+  /** True when the component is registered globally (`global: true` or `components/global`). */
+  global?: boolean;
   /** True when the component is a page route */
   isPage: boolean;
   /** Layer name this component originates from (undefined = project root) */

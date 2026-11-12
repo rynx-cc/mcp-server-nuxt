@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { listComponents, listComposables, listPageRoutes } from '../src/utils/nuxt-parser.js';
+import { listComposables, listPageRoutes } from '../src/utils/nuxt-parser.js';
+import { listComponents } from '../src/utils/component-scan.js';
 
 let base: string;
 
