@@ -122,20 +122,45 @@ function resolveComponentNameSegments(fileName: string, prefixParts: string[]): 
 }
 
 function pascalJoin(parts: string[]): string {
+  // Match scule's pascalCase without `normalize`: uppercase the first letter
+  // and keep the rest, so `XMLParser` does not become `XmlParser`.
   return parts
     .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join('');
 }
 
-/** Derive the auto-import name for a component under a components/ directory. */
-export function componentAutoImportName(relPath: string): string {
-  const normalized = relPath.replace(/\\/g, '/').replace(/\.(vue|jsx|tsx)$/i, '');
-  const segments = normalized.split('/').filter((segment) => segment && segment !== '.');
-  const fileRaw = (segments.pop() ?? '').replace(/(?:\.(?:client|server))?(?:\.global|\.island)*$/i, '');
-  const fileName = fileRaw.toLowerCase() === 'index' ? '' : fileRaw;
-  const prefixParts = splitByCase(segments.filter((segment) => !GROUPING_FOLDER_RE.test(segment.trim())).join('/'));
-  return pascalJoin(resolveComponentNameSegments(fileName, prefixParts));
+const MODE_REPLACEMENT_RE = /(?:\.(?:client|server))?(?:\.global|\.island)*$/i;
+
+export interface ComponentNameOptions {
+  /** `prefix` from a components directory entry. */
+  prefix?: string;
+  /** When false, parent directories are not part of the name. Default true. */
+  pathPrefix?: boolean;
+}
+
+/**
+ * Derive the auto-import name Nuxt would generate for a file relative to a
+ * components directory. Repeated prefix/path segments are collapsed
+ * (`base/BaseButton.vue` → `BaseButton`).
+ */
+export function componentAutoImportName(relPath: string, options: ComponentNameOptions = {}): string {
+  const pathPrefix = options.pathPrefix !== false;
+  const normalized = relPath.replace(/\\/g, '/');
+  const ext = path.posix.extname(normalized);
+  const withoutExt = ext ? normalized.slice(0, -ext.length) : normalized;
+  const segments = withoutExt.split('/').filter((segment) => segment && segment !== '.');
+  let fileRaw = (segments.pop() ?? '').replace(MODE_REPLACEMENT_RE, '');
+  if (fileRaw.toLowerCase() === 'index') {
+    fileRaw = pathPrefix ? '' : (segments.pop() ?? '').replace(MODE_REPLACEMENT_RE, '');
+  }
+  const prefixParts: string[] = [];
+  if (options.prefix) prefixParts.push(...splitByCase(options.prefix));
+  if (pathPrefix) {
+    const dir = segments.filter((segment) => !GROUPING_FOLDER_RE.test(segment.trim())).join('/');
+    if (dir) prefixParts.push(...splitByCase(dir));
+  }
+  return pascalJoin(resolveComponentNameSegments(fileRaw, prefixParts));
 }
 
 /* ------------------------------------------------------------------ */
@@ -424,43 +449,6 @@ export async function parseVueComponent(file: string): Promise<{
     slots: parseSlots(template),
     hasScriptSetup: scriptSetup.length > 0,
   };
-}
-
-export async function listComponents(
-  root: string,
-  layers: Array<{ cwd: string; name: string }> = [],
-): Promise<ComponentInfo[]> {
-  const targets = [{ cwd: root, name: undefined as string | undefined }, ...layers.map((l) => ({ cwd: l.cwd, name: l.name }))];
-  const components: ComponentInfo[] = [];
-  const seen = new Set<string>();
-
-  for (const target of targets) {
-    const dirs = await resolveSourceDirs(target.cwd);
-    if (!(await exists(dirs.componentsDir))) continue;
-    const files = await findFiles(dirs.componentsDir, ['**/*.vue']);
-    for (const file of files) {
-      if (seen.has(file)) continue;
-      seen.add(file);
-      const relFromComponents = relativePath(dirs.componentsDir, file);
-      const name = componentAutoImportName(relFromComponents);
-      if (!name) continue;
-      const { props, emits, slots } = await parseVueComponent(file);
-      components.push({
-        name,
-        file: relativePath(target.cwd, file),
-        absolutePath: file,
-        directory: 'components',
-        props,
-        emits,
-        slots,
-        autoImported: true,
-        isPage: false,
-        layer: target.name,
-      });
-    }
-  }
-
-  return components.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /* ------------------------------------------------------------------ */

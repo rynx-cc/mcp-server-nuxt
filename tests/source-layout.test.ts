@@ -6,13 +6,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { NuxtProjectContext } from '../src/context.js';
 import { registerServerApiTools } from '../src/tools/server-api.js';
 import {
-  listComponents,
   listComposables,
   listDirectories,
   listPageRoutes,
   listServerRoutes,
   readTypeInfo,
 } from '../src/utils/nuxt-parser.js';
+import { listComponents } from '../src/utils/component-scan.js';
 
 let base: string;
 

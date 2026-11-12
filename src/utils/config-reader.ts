@@ -9,6 +9,7 @@
 import { promises as fs, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { ConfigDiff } from '../types.js';
+import { installNode18ImportMetaPaths } from './node18-import-meta.js';
 
 const CONFIG_FILENAMES = [
   'nuxt.config.ts',
@@ -90,6 +91,7 @@ export async function loadNuxtConfig(projectRoot: string): Promise<LoadedNuxtCon
   const projectHasNuxt = existsSync(path.join(projectRoot, 'node_modules', 'nuxt', 'package.json'));
   if (projectHasNuxt) {
     try {
+      await installNode18ImportMetaPaths();
       const kit = await import('@nuxt/kit');
       if (typeof kit.loadNuxtConfig === 'function') {
         const value = (await kit.loadNuxtConfig({

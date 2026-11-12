@@ -343,8 +343,8 @@ Aligned with `0.3.0` (24 tools). Full mapping: [docs/SPEC_MATRIX.md](./docs/SPEC
 
 | Tool | Description |
 | --- | --- |
-| `list_components` | All components, including those injected by layers and modules |
-| `inspect_component` | Props types, emits, slots, and `<script setup>` details |
+| `list_components` | Components from `.nuxt/components.d.ts` when it exists, otherwise `components` and `components.dirs` (prefix, `pathPrefix`, extensions, `~` / `@` / `~~` / `@@`) |
+| `inspect_component` | One component by that auto-imported name: props, emits, slots |
 | `generate_component` | Generate a typed Vue SFC |
 | `list_composables` | User-defined and auto-imported composables |
 | `generate_composable` | Scaffold a typed `useXxx` composable under `composables/` |
