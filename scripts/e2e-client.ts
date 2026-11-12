@@ -6,6 +6,9 @@
  * Usage:
  *   REAL_PROJECT=/tmp/... BARE_PROJECT=/tmp/... PACK_BIN=/tmp/.../node_modules/.bin/mcp-server-nuxt \
  *     npx tsx scripts/e2e-client.ts
+ *
+ * Readonly smoke (skip bare/writes):
+ *   READONLY_ONLY=1 REAL_PROJECT=/tmp/... PACK_BIN=... npx tsx scripts/e2e-client.ts
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -319,61 +322,65 @@ function printTable(): string {
 async function main(): Promise<void> {
   const bin = env('PACK_BIN');
   const realProject = env('REAL_PROJECT');
-  const bareProject = env('BARE_PROJECT');
+  const readonlyOnly = process.env.READONLY_ONLY === '1' || process.env.READONLY_ONLY === 'true';
+  const bareProject = readonlyOnly ? (process.env.BARE_PROJECT ?? '') : env('BARE_PROJECT');
   const reportPath = env('REPORT_PATH', path.resolve('docs/e2e-report.md'));
 
   console.error('E2E against packed binary:', bin);
   console.error('Real project:', realProject);
-  console.error('Bare project:', bareProject);
+  console.error('Bare project:', bareProject || '(skipped)');
+  console.error('Readonly only:', readonlyOnly);
 
-  // 1) Prepared real project — readonly + dry writes
+  // 1) Prepared real project — readonly (+ dry writes unless READONLY_ONLY)
   await withClient(bin, realProject, false, async (client) => {
     await runReadonlySuite(client, 'real');
-    await runDryWrites(client);
+    if (!readonlyOnly) await runDryWrites(client);
   });
 
-  // 2) Bare project (no node_modules / .nuxt) — degradation path
-  await withClient(bin, bareProject, false, async (client) => {
-    const overview = (await callTool(client, 'get_project_overview')) as Record<string, unknown>;
-    if (overview.built !== false) throw new Error('bare project should report built:false');
-    const auto = (await callTool(client, 'get_auto_imports')) as Record<string, unknown>;
-    if (auto.built !== false) throw new Error('bare get_auto_imports should be built:false');
-    const analysis = (await callTool(client, 'analyze_project')) as Record<string, unknown>;
-    const hints = (analysis.hints as string[]) ?? [];
-    if (!hints.some((h) => /nuxi prepare/i.test(h))) {
-      throw new Error('bare analyze_project missing prepare hint');
+  if (!readonlyOnly) {
+    // 2) Bare project (no node_modules / .nuxt) — degradation path
+    await withClient(bin, bareProject, false, async (client) => {
+      const overview = (await callTool(client, 'get_project_overview')) as Record<string, unknown>;
+      if (overview.built !== false) throw new Error('bare project should report built:false');
+      const auto = (await callTool(client, 'get_auto_imports')) as Record<string, unknown>;
+      if (auto.built !== false) throw new Error('bare get_auto_imports should be built:false');
+      const analysis = (await callTool(client, 'analyze_project')) as Record<string, unknown>;
+      const hints = (analysis.hints as string[]) ?? [];
+      if (!hints.some((h) => /nuxi prepare/i.test(h))) {
+        throw new Error('bare analyze_project missing prepare hint');
+      }
+      await callTool(client, 'list_routes');
+      await callTool(client, 'list_components', { limit: 20 });
+    });
+
+    // 3) Real writes
+    await withClient(bin, realProject, true, async (client) => {
+      await runRealWrites(client, realProject);
+    });
+
+    // 4) Project still prepares / typechecks
+    const t0 = performance.now();
+    const { spawnSync } = await import('node:child_process');
+    const prepare = spawnSync('npx', ['nuxi', 'prepare'], { cwd: realProject, encoding: 'utf8', timeout: 120_000 });
+    const ms = Math.round(performance.now() - t0);
+    if (prepare.status !== 0) {
+      rows.push({
+        name: 'nuxi prepare after writes',
+        kind: 'meta',
+        status: 'FAIL',
+        ms,
+        summary: summarize(prepare.stderr || prepare.stdout),
+      });
+      failures.push('nuxi prepare failed after writes');
+    } else {
+      rows.push({
+        name: 'nuxi prepare after writes',
+        kind: 'meta',
+        status: 'PASS',
+        ms,
+        summary: 'types regenerated',
+      });
     }
-    await callTool(client, 'list_routes');
-    await callTool(client, 'list_components', { limit: 20 });
-  });
-
-  // 3) Real writes
-  await withClient(bin, realProject, true, async (client) => {
-    await runRealWrites(client, realProject);
-  });
-
-  // 4) Project still prepares / typechecks
-  const t0 = performance.now();
-  const { spawnSync } = await import('node:child_process');
-  const prepare = spawnSync('npx', ['nuxi', 'prepare'], { cwd: realProject, encoding: 'utf8', timeout: 120_000 });
-  const ms = Math.round(performance.now() - t0);
-  if (prepare.status !== 0) {
-    rows.push({
-      name: 'nuxi prepare after writes',
-      kind: 'meta',
-      status: 'FAIL',
-      ms,
-      summary: summarize(prepare.stderr || prepare.stdout),
-    });
-    failures.push('nuxi prepare failed after writes');
-  } else {
-    rows.push({
-      name: 'nuxi prepare after writes',
-      kind: 'meta',
-      status: 'PASS',
-      ms,
-      summary: 'types regenerated',
-    });
   }
 
   const table = printTable();
