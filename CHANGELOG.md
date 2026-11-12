@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 - 2026-11-12
+
+### Fixed
+- Missing `bin` entry in 0.5.0 (`npx` was broken). npm 11 rejects `bin` targets written as `./dist/index.js` and strips the field when packing; use the normalized `dist/index.js` form (`npm pkg fix`). The CLI entry already starts with `#!/usr/bin/env node`.
+
 ## 0.5.0 - 2026-11-12
 
 ### Added

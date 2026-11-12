@@ -1,12 +1,12 @@
 {
   "name": "mcp-server-nuxt",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "MCP server for Nuxt projects — exposes routes, components, config, and more to AI agents",
   "type": "module",
   "bin": {
-    "mcp-server-nuxt": "./dist/index.js"
+    "mcp-server-nuxt": "dist/index.js"
   },
-  "main": "./dist/index.js",
+  "main": "dist/index.js",
   "files": [
     "dist",
     "README.md",
