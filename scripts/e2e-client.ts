@@ -9,9 +9,24 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { promises as fs } from 'node:fs';
+import { promises as fs, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+
+function real(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    // Parent may not exist yet for planned paths; normalize /private/var on macOS.
+    return path.resolve(p).replace(/^\/private(\/var\/)/, '$1');
+  }
+}
+
+function isInsideProject(project: string, target: string): boolean {
+  const root = real(project);
+  const resolved = real(target);
+  return resolved === root || resolved.startsWith(root + path.sep);
+}
 
 interface Row {
   name: string;
@@ -220,10 +235,16 @@ async function runDryWrites(client: Client): Promise<void> {
 }
 
 async function runRealWrites(client: Client, project: string): Promise<void> {
+  const stamp = Date.now().toString(36);
+  const pagePath = `/e2e-live-${stamp}`;
+  const componentName = `E2eLiveCard${stamp}`;
+  const composableName = `e2eLive${stamp}`;
+  const apiPath = `/api/e2e-live-${stamp}`;
+
   const page = (await callTool(
     client,
     'add_route',
-    { path: '/e2e-live', dryRun: false },
+    { path: pagePath, dryRun: false },
     { kind: 'write' },
   )) as Record<string, unknown>;
   if (page.written !== true || !(await exists(String(page.path)))) {
@@ -233,7 +254,7 @@ async function runRealWrites(client: Client, project: string): Promise<void> {
   const genComp = (await callTool(
     client,
     'generate_component',
-    { name: 'E2eLiveCard', dryRun: false, props: { title: 'string' } },
+    { name: componentName, dryRun: false, props: { title: 'string' } },
     { kind: 'write' },
   )) as Record<string, unknown>;
   const genCompPath = String(genComp.path);
@@ -244,21 +265,21 @@ async function runRealWrites(client: Client, project: string): Promise<void> {
   const genComp2 = (await callTool(
     client,
     'generate_composable',
-    { name: 'e2eLive', dryRun: false },
+    { name: composableName, dryRun: false },
     { kind: 'write' },
   )) as Record<string, unknown>;
   if (genComp2.written !== true || !(await exists(String(genComp2.path)))) {
-    throw new Error('missing composable');
+    throw new Error(`missing composable: ${JSON.stringify(genComp2)}`);
   }
 
   const api = (await callTool(
     client,
     'scaffold_nitro_api',
-    { path: '/api/e2e-live', method: 'get', dryRun: false },
+    { path: apiPath, method: 'get', dryRun: false },
     { kind: 'write' },
   )) as Record<string, unknown>;
   if (api.written !== true || !(await exists(String(api.path)))) {
-    throw new Error('missing api');
+    throw new Error(`missing api: ${JSON.stringify(api)}`);
   }
 
   const cfg = (await callTool(
@@ -272,8 +293,8 @@ async function runRealWrites(client: Client, project: string): Promise<void> {
   }
 
   for (const p of [genCompPath, String(genComp2.path), String(api.path), String(page.path)]) {
-    if (!path.resolve(p).startsWith(path.resolve(project) + path.sep) && path.resolve(p) !== path.resolve(project)) {
-      throw new Error(`wrote outside project: ${p}`);
+    if (!isInsideProject(project, p)) {
+      throw new Error(`wrote outside project: ${p} (root=${real(project)})`);
     }
   }
 }

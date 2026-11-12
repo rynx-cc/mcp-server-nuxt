@@ -1,0 +1,8 @@
+mcp-server-nuxt 0.3.0 已发布到 npm。
+
+给 AI 用的独立 Nuxt MCP：路由、Layers、auto-imports、Nitro，不依赖 DevServer。24 个工具，写操作默认 dry-run。
+
+npx -y mcp-server-nuxt@0.3.0 /你的/nuxt/项目
+
+@nuxt_js @antfu7
+https://www.npmjs.com/package/mcp-server-nuxt

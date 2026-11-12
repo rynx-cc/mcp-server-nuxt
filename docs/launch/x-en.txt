@@ -1,0 +1,8 @@
+mcp-server-nuxt 0.3.0 is on npm.
+
+Standalone MCP for Nuxt: routes, layers, auto-imports, Nitro — no DevServer required. 24 tools, write tools dry-run by default.
+
+npx -y mcp-server-nuxt@0.3.0 /path/to/app
+
+@nuxt_js @antfu7
+https://www.npmjs.com/package/mcp-server-nuxt

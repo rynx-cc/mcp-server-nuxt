@@ -1,16 +1,68 @@
-<div align="center"> 
+<div align="center">
 <h1>mcp-server-nuxt</h1>
 
 A production-ready Model Context Protocol server that gives LLMs Nuxt's resolved state.
 
 [![npm version](https://img.shields.io/npm/v/mcp-server-nuxt?style=flat-square&color=00DC82&label=npm)](https://www.npmjs.com/package/mcp-server-nuxt)
+[![npm downloads](https://img.shields.io/npm/dm/mcp-server-nuxt?style=flat-square&color=00DC82)](https://www.npmjs.com/package/mcp-server-nuxt)
 [![license](https://img.shields.io/npm/l/mcp-server-nuxt?style=flat-square&color=gray)](./LICENSE)
+[![CI](https://github.com/rynx-cc/mcp-server-nuxt/actions/workflows/ci.yml/badge.svg)](https://github.com/rynx-cc/mcp-server-nuxt/actions/workflows/ci.yml)
 [![node](https://img.shields.io/node/v/mcp-server-nuxt?style=flat-square&color=blue)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](#)
 
 Generic LLMs get file-based routing, auto-imports, `extends` layers, and Nitro wrong more often than anything else in Nuxt.
 
 </div>
+
+---
+
+## 30-second setup
+
+**Cursor** — add `.cursor/mcp.json` in your Nuxt app (absolute path required):
+
+```json
+{
+  "mcpServers": {
+    "mcp-server-nuxt": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
+    }
+  }
+}
+```
+
+**Claude Desktop** — edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/`; Windows: `%APPDATA%\Claude\`), same shape:
+
+```json
+{
+  "mcpServers": {
+    "mcp-server-nuxt": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
+    }
+  }
+}
+```
+
+Restart the client, then ask:
+
+> What routes does this project have?
+
+Example reply (shape from `list_routes`):
+
+```json
+{
+  "count": 4,
+  "total": 4,
+  "routes": [
+    { "path": "/", "file": "app/pages/index.vue", "params": [] },
+    { "path": "/about", "file": "app/pages/about.vue", "params": [] },
+    { "path": "/users/:id", "file": "app/pages/users/[id].vue", "params": ["id"] },
+    { "path": "/blog/:slug?", "file": "app/pages/blog/[...slug].vue", "params": ["slug"] }
+  ]
+}
+```
+
+Writes stay off until you pass `--allow-writes` or set `MCP_NUXT_ALLOW_WRITES=1`. Full client configs (VS Code, Windows `cmd` wrapper) are below.
 
 ---
 
