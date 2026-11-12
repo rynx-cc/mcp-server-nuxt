@@ -314,7 +314,7 @@ The server exposes read-only resources (`resources/*`) for large, cacheable data
 
 ## Tools reference
 
-Aligned with current main (**25 tools**). Full mapping: [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md).
+Aligned with `0.5.0` (**25 tools**). Full mapping: [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md).
 
 ### Project and core
 

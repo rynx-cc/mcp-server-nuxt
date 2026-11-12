@@ -1,13 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-11-12
 
 ### Added
-- `explain_route` — given a concrete URL (e.g. `/users/42`), explain Nuxt resolution: matched page + params (including catch-all), nested parents, layout (including `layout: false`), ordered global/named/inline middleware, `useFetch`/`useAsyncData`/`$fetch` calls, and mapped `server/api` handlers. Static analysis only; no DevServer or `nuxi prepare`.
+- `explain_route` — given a concrete URL (e.g. `/users/42`), explain Nuxt resolution: matched page + params (including catch-all), nested parents, layout (including `layout: false`), ordered global/named/inline middleware, `useFetch`/`useAsyncData`/`$fetch` calls, and mapped `server/api` handlers. Static analysis only; no DevServer or `nuxi prepare`. **25 tools** total.
 
 ### Fixed
 - Node 18 can load Nuxt again. Dependencies such as `unplugin` call `path.resolve(import.meta.dirname, ...)`, and `import.meta.dirname` is undefined before Node 20.11, which surfaced as `The "paths[0]" argument must be of type string` from `get_type_info`. An ESM loader rewrites those reads to `fileURLToPath(import.meta.url)` before `@nuxt/kit` is imported. The same loader supplies `styleText` and `parseEnv` fallbacks for `node:util`, which current Nuxt packages import and Node 18 does not export
-- `list_components` and `inspect_component` honor `components` (`dirs`, array entries, `prefix`, `pathPrefix: false`, `extensions`, `global`) and resolve `~`, `@`, `~~`, and `@@` from srcDir/rootDir, including layers. Names follow Nuxt's prefix and repeated-segment rules. `.nuxt/components.d.ts` is used when it lists components. Unresolved paths are skipped with a warning instead of a guessed name
+- `list_components` and `inspect_component` honor custom `components` / `components.dirs` scanning (`dirs`, array entries, `prefix`, `pathPrefix: false`, `extensions`, `global`) and resolve `~`, `@`, `~~`, and `@@` from srcDir/rootDir, including layers (#12, PR #17). Names follow Nuxt's prefix and repeated-segment rules. `.nuxt/components.d.ts` is used when it lists components. Unresolved paths are skipped with a warning instead of a guessed name
 
 ## 0.4.1
 
