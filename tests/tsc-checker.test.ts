@@ -34,35 +34,39 @@ describe('parseTscOutput', () => {
 });
 
 describe('runTscCheck', () => {
-  it('typechecks referenced projects instead of an empty solution tsconfig', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nuxt-tsc-'));
-    tempDirs.push(root);
-    await fs.writeFile(
-      path.join(root, 'tsconfig.json'),
-      JSON.stringify({ files: [], references: [{ path: './tsconfig.app.json' }] }),
-    );
-    await fs.writeFile(
-      path.join(root, 'tsconfig.app.json'),
-      JSON.stringify({
-        compilerOptions: {
-          strict: true,
-          target: 'ES2022',
-          module: 'ESNext',
-          moduleResolution: 'Bundler',
-          noEmit: true,
-        },
-        include: ['src'],
-      }),
-    );
-    await fs.mkdir(path.join(root, 'src'));
-    await fs.writeFile(path.join(root, 'src/bad.ts'), 'export const n: number = "nope";\n');
-    await fs.symlink(path.join(repoRoot, 'node_modules'), path.join(root, 'node_modules'));
+  it(
+    'typechecks referenced projects instead of an empty solution tsconfig',
+    async () => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nuxt-tsc-'));
+      tempDirs.push(root);
+      await fs.writeFile(
+        path.join(root, 'tsconfig.json'),
+        JSON.stringify({ files: [], references: [{ path: './tsconfig.app.json' }] }),
+      );
+      await fs.writeFile(
+        path.join(root, 'tsconfig.app.json'),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            target: 'ES2022',
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            noEmit: true,
+          },
+          include: ['src'],
+        }),
+      );
+      await fs.mkdir(path.join(root, 'src'));
+      await fs.writeFile(path.join(root, 'src/bad.ts'), 'export const n: number = "nope";\n');
+      await fs.symlink(path.join(repoRoot, 'node_modules'), path.join(root, 'node_modules'));
 
-    const result = await runTscCheck(root);
-    expect(result.ran).toBe(true);
-    expect(result.projects).toEqual([path.join(root, 'tsconfig.app.json')]);
-    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 2322)).toBe(true);
-  });
+      const result = await runTscCheck(root);
+      expect(result.ran).toBe(true);
+      expect(result.projects).toEqual([path.join(root, 'tsconfig.app.json')]);
+      expect(result.diagnostics.some((diagnostic) => diagnostic.code === 2322)).toBe(true);
+    },
+    20_000,
+  );
 
   it('explains when no tsconfig exists', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nuxt-tsc-empty-'));

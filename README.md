@@ -78,7 +78,7 @@ A generic AI agent looking at a Nuxt repo sees a directory tree. It does not see
 
 Without that context the model guesses. It invents import paths, misnames auto-imported components, and misreads layer precedence. The gap is between the source tree and Nuxt's resolved runtime state.
 
-`mcp-server-nuxt` exposes that resolved state through **24 tools** and **7 read-only resources** over MCP (core MVP: 15 tools / 5 resources — see [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md)). It reads Nuxt's own output (`loadNuxtConfig`, `.nuxt/`) rather than guessing from filenames alone.
+`mcp-server-nuxt` exposes that resolved state through **25 tools** and **7 read-only resources** over MCP (core MVP: 15 tools / 5 resources — see [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md)). It reads Nuxt's own output (`loadNuxtConfig`, `.nuxt/`) rather than guessing from filenames alone.
 
 ### Design principles
 
@@ -314,7 +314,7 @@ The server exposes read-only resources (`resources/*`) for large, cacheable data
 
 ## Tools reference
 
-Aligned with `0.3.0` (24 tools). Full mapping: [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md).
+Aligned with current main (**25 tools**). Full mapping: [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md).
 
 ### Project and core
 
@@ -334,7 +334,39 @@ Aligned with `0.3.0` (24 tools). Full mapping: [docs/SPEC_MATRIX.md](./docs/SPEC
 | --- | --- |
 | `list_routes` | File-based, dynamic, optional, catch-all, and nested routes |
 | `get_route` | One route by path, e.g. `/users/:id` |
+| `explain_route` | Explain a concrete URL (params, layout, middleware, data fetching, `/api` mapping) |
 | `add_route` | Scaffold a page under `pages/` following Nuxt conventions |
+
+Example `explain_route` input/output:
+
+```json
+// input
+{ "route": "/users/42" }
+
+// output (abridged)
+{
+  "matched": true,
+  "page": {
+    "file": "pages/users/[id].vue",
+    "routeName": "users-id",
+    "pattern": "/users/:id",
+    "params": { "id": "42" }
+  },
+  "parents": [{ "file": "pages/users.vue", "pattern": "/users" }],
+  "layout": { "name": "default", "file": "layouts/default.vue" },
+  "middleware": [
+    { "name": "logger", "type": "global", "file": "middleware/logger.global.ts" },
+    { "name": "auth", "type": "named", "file": "middleware/auth.ts" }
+  ],
+  "dataFetching": [
+    { "composable": "useFetch", "keyOrUrl": "/api/hello", "line": 4, "file": "pages/users/[id].vue" }
+  ],
+  "serverRoutes": [
+    { "url": "/api/hello", "file": "server/api/hello.get.ts", "method": "GET" }
+  ],
+  "notes": []
+}
+```
 | `inspect_route_meta` | `definePageMeta`, layout, middleware, and props/emits/slots for a page |
 | `list_server_routes` | Nitro endpoints, middleware, and plugins with method and middleware chain |
 | `scaffold_nitro_api` | Generate an H3 handler with optional Zod body validation |

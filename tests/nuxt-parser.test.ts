@@ -66,6 +66,18 @@ describe('extractPageMeta', () => {
       meta: {},
       middleware: [],
       layout: undefined,
+      layoutDisabled: false,
+      hasInlineMiddleware: false,
+    });
+  });
+
+  it('detects layout false and inline middleware', () => {
+    expect(
+      extractPageMeta('definePageMeta({ layout: false, middleware: [() => {}] })'),
+    ).toMatchObject({
+      layoutDisabled: true,
+      hasInlineMiddleware: true,
+      middleware: [],
     });
   });
 });

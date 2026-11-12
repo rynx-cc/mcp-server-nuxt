@@ -248,26 +248,38 @@ export function extractPageMeta(content: string): {
   meta: Record<string, unknown>;
   middleware: string[];
   layout?: string;
+  /** True when `definePageMeta({ layout: false })`. */
+  layoutDisabled?: boolean;
+  /** True when middleware includes an inline function / arrow. */
+  hasInlineMiddleware?: boolean;
 } {
   const meta: Record<string, unknown> = {};
   let middleware: string[] = [];
   let layout: string | undefined;
+  let layoutDisabled = false;
+  let hasInlineMiddleware = false;
 
   const defMatch = content.match(/definePageMeta\s*\(\s*\{([\s\S]*?)\}\s*\)/);
-  if (!defMatch) return { meta, middleware, layout };
+  if (!defMatch) return { meta, middleware, layout, layoutDisabled, hasInlineMiddleware };
 
   const body = defMatch[1]!;
   for (const line of body.split('\n')) {
-    const layoutMatch = line.match(/layout\s*:\s*["']([^"']+)["']/);
-    if (layoutMatch) layout = layoutMatch[1];
+    if (/\blayout\s*:\s*false\b/.test(line)) {
+      layoutDisabled = true;
+      layout = undefined;
+    } else {
+      const layoutMatch = line.match(/layout\s*:\s*["']([^"']+)["']/);
+      if (layoutMatch) layout = layoutMatch[1];
+    }
 
-    const mwMatch = line.match(/middleware\s*:\s*(\[[\s\S]*?\]|["'][^"']+["'])/);
+    const mwMatch = line.match(/middleware\s*:\s*(\[[\s\S]*?\]|["'][^"']+["']|[^,\n]+)/);
     if (mwMatch) {
-      const raw = mwMatch[1]!;
+      const raw = mwMatch[1]!.trim();
+      if (/=>|function\s*\(/.test(raw)) hasInlineMiddleware = true;
       if (raw.startsWith('[')) {
         middleware = [...raw.matchAll(/["']([^"']+)["']/g)].map((m) => m[1]!);
-      } else {
-        middleware = [raw.replace(/["']/g, '')];
+      } else if (/^["']/.test(raw)) {
+        middleware = [raw.replace(/^["']|["']$/g, '')];
       }
     }
 
@@ -276,7 +288,7 @@ export function extractPageMeta(content: string): {
       meta[kv[1]!] = kv[2]!.trim();
     }
   }
-  return { meta, middleware, layout };
+  return { meta, middleware, layout, layoutDisabled, hasInlineMiddleware };
 }
 
 async function listRoutesIn(scanRoot: string, layer?: string): Promise<RouteInfo[]> {

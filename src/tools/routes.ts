@@ -1,5 +1,5 @@
 /**
- * Page route tools: list_routes, get_route, add_route.
+ * Page route tools: list_routes, get_route, add_route, explain_route.
  */
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
@@ -9,6 +9,7 @@ import type { NuxtProjectContext } from '../context.js';
 import { jsonResult, safe } from '../utils/helpers.js';
 import { routePathToFile } from '../utils/nuxt-parser.js';
 import { prepareWrite } from '../utils/write-path.js';
+import { explainRoute } from '../utils/explain-route.js';
 
 function jsSingleQuoted(value: string): string {
   return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
@@ -61,6 +62,34 @@ export function registerRouteTools(server: McpServer, ctx: NuxtProjectContext): 
         });
       }
       return jsonResult({ found: true, route });
+    }),
+  );
+
+  server.tool(
+    'explain_route',
+    'Explain how Nuxt resolves a concrete URL (e.g. /users/42): matched page, dynamic params, nested parents, layout, middleware order, data-fetching calls, and mapped /api server handlers. Static analysis only — no DevServer or nuxi prepare.',
+    {
+      route: z.string().describe('Concrete URL path to explain, e.g. /users/42 or /blog/hello/world'),
+      root: z
+        .string()
+        .optional()
+        .describe('Optional project root override (defaults to the server project path)'),
+    },
+    safe(async ({ route, root }) => {
+      const projectRoot = root ? path.resolve(root) : ctx.root;
+      let routes;
+      let serverRoutes;
+      if (projectRoot === ctx.root) {
+        const snap = await ctx.snapshot();
+        routes = snap.routes;
+        serverRoutes = snap.serverRoutes;
+      } else {
+        const { listPageRoutes, listServerRoutes } = await import('../utils/nuxt-parser.js');
+        routes = await listPageRoutes(projectRoot);
+        serverRoutes = await listServerRoutes(projectRoot);
+      }
+      const result = await explainRoute(projectRoot, route, routes, serverRoutes);
+      return jsonResult(result);
     }),
   );
 
