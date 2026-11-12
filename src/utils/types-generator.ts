@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { findConfigFile } from './config-reader.js';
+import { installNode18ImportMetaPaths } from './node18-import-meta.js';
 
 export type TypesSource = 'project' | 'cache' | 'generated' | 'fallback' | 'none';
 
@@ -109,6 +110,7 @@ async function writeMeta(dir: string, meta: TypesMeta): Promise<void> {
 }
 
 async function loadKit(projectRoot: string): Promise<NuxtKitLike> {
+  await installNode18ImportMetaPaths();
   const require = createRequire(path.join(projectRoot, 'package.json'));
   try {
     const kitPath = require.resolve('@nuxt/kit');

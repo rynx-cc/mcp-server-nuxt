@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Node 18 can load Nuxt again. Dependencies such as `unplugin` call `path.resolve(import.meta.dirname, ...)`, and `import.meta.dirname` is undefined before Node 20.11, which surfaced as `The "paths[0]" argument must be of type string` from `get_type_info`. An ESM loader rewrites those reads to `fileURLToPath(import.meta.url)` before `@nuxt/kit` is imported. The same loader supplies a `styleText` fallback for `node:util`, which current Nuxt packages import and Node 18 does not export
 - `list_components` and `inspect_component` honor `components` (`dirs`, array entries, `prefix`, `pathPrefix: false`, `extensions`, `global`) and resolve `~`, `@`, `~~`, and `@@` from srcDir/rootDir, including layers. Names follow Nuxt's prefix and repeated-segment rules. `.nuxt/components.d.ts` is used when it lists components. Unresolved paths are skipped with a warning instead of a guessed name
 
 ## 0.4.1
