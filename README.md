@@ -49,7 +49,7 @@ A generic agent sees a Nuxt repo as a folder tree. It doesn't know that:
 - `extends: ['../ui-kit']` layers components, pages, and config over your app
 - `server/api/hello.get.ts` registers `GET /api/hello`
 
-So it guesses, and invents import paths, misnames components, and misreads layer precedence. `mcp-server-nuxt` reads Nuxt's own config loader and `.nuxt/` output (with a source-level fallback) and hands the agent the real answers through **25 tools** and **7 read-only resources**.
+So it guesses, and invents import paths, misnames components, and misreads layer precedence. `mcp-server-nuxt` reads Nuxt's own config loader and `.nuxt/` output (with a source-level fallback) and hands the agent the real answers through **27 tools** and **7 read-only resources**.
 
 It runs as a standalone CLI, so it works on a freshly cloned repo before anyone has installed dependencies or started `npm run dev`.
 
@@ -87,7 +87,8 @@ Middleware comes back in run order (global first, then named), catch-all params 
 
 | Tool | What it does |
 | --- | --- |
-| `explain_route` | Resolve one URL: page, parents, layout, middleware order, data fetching, `/api` files |
+| `explain_route` | Resolve one URL: page, parents, layout, middleware order, data fetching, `/api` files, render mode |
+| `explain_render_mode` | Resolve a URL's Nitro render mode from `routeRules` (ssr/spa/prerender/isr/swr/static) |
 | `list_routes` | All routes: dynamic, optional, catch-all, nested |
 | `get_route` | One route by pattern, e.g. `/users/:id` |
 | `inspect_route_meta` | `definePageMeta`, layout, middleware, props/emits/slots of a page |
@@ -101,6 +102,7 @@ Middleware comes back in run order (global first, then named), catch-all params 
 | Tool | What it does |
 | --- | --- |
 | `list_server_routes` | Endpoints, server middleware, and plugins with method and middleware chain |
+| `find_api_callers` | Find every caller of a server route (`useFetch` / `$fetch` / `useAsyncData($fetch)`) by file path or URL |
 | `scaffold_nitro_api` ✏️ | Generate an H3 handler with optional Zod body validation |
 
 </details>

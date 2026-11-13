@@ -1,11 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 - 2026-11-13
 
 ### Added
 - `explain_render_mode` — resolve a concrete URL's Nitro render mode from nuxt.config `routeRules` / `nitro.routeRules` (ssr / spa / prerender / isr / swr / static) with cache TTL, redirect, cors, headers, proxy, matched rules, and non-evaluable-expression notes. Static analysis only; no DevServer or `nuxi prepare`.
 - `find_api_callers` — resolve a server API route by handler file path or concrete URL, then list every `useFetch` / `useLazyFetch` / `$fetch` / `useAsyncData($fetch)` caller across pages, components, composables, layouts, plugins, middleware, and utils (including Nuxt 4 `app/`). Handles template-string dynamic URLs and method mismatches. Static analysis only. **27 tools** total.
 - `explain_route` now also reports a `renderMode` summary (mode + cache) using the same static route-rules analysis.
+
+### Docs
+- docs: rewrite README
 
 ## 0.5.1 - 2026-11-12
 
