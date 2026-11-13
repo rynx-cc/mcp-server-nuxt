@@ -34,8 +34,8 @@ Original MVP target: **15 tools** and **5 resources**. v0.2.0 shipped extras (la
 
 ## Extra surface (v0.2+, kept)
 
-Tools: `inspect_route_meta`, `get_auto_imports`, `get_type_info`, `add_nuxt_module`, `inspect_layers`, `check_type_errors`, `analyze_bundle_deps`, `search_code`, `get_nuxt_docs`, `explain_route` (0.5.0).
+Tools: `inspect_route_meta`, `get_auto_imports`, `get_type_info`, `add_nuxt_module`, `inspect_layers`, `check_type_errors`, `analyze_bundle_deps`, `search_code`, `get_nuxt_docs`, `explain_route` (0.5.0), `explain_render_mode`, `find_api_callers` (Unreleased).
 
 Resources: `nuxt://project/auto-imports`, `nuxt://project/types`.
 
-**Total registered in 0.5.0:** 25 tools, 7 resources (0.3.0 shipped 24).
+**Total registered:** 27 tools, 7 resources (0.5.0 shipped 25).

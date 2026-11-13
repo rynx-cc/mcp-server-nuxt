@@ -7,6 +7,7 @@ import path from 'node:path';
 import type { RouteInfo, ServerRouteInfo } from '../types.js';
 import { exists, extractPageMeta, fileToRoutePath, findFiles, relativePath } from './nuxt-parser.js';
 import { resolveSourceDirs } from './source-dirs.js';
+import { getRenderModeSummary, type RenderModeSummary } from './render-mode.js';
 
 export interface ExplainRoutePage {
   file: string;
@@ -41,6 +42,7 @@ export interface ExplainRouteResult {
   middleware: ExplainRouteMiddleware[];
   dataFetching: ExplainRouteDataFetch[];
   serverRoutes: Array<{ url: string; file: string; method: string }>;
+  renderMode: RenderModeSummary;
   notes: string[];
   alternatives?: Array<{ pattern: string; file: string }>;
 }
@@ -115,7 +117,7 @@ export function matchPattern(
 }
 
 /** Prefer more specific (fewer catch-alls / optionals, more static segments). */
-function specificity(pattern: string): number {
+export function specificity(pattern: string): number {
   const parts = pattern.split('/').filter(Boolean);
   let score = 0;
   for (const part of parts) {
@@ -287,6 +289,7 @@ export async function explainRoute(
 ): Promise<ExplainRouteResult> {
   const notes: string[] = [];
   const url = normalizeUrl(routeInput);
+  const renderMode = await getRenderModeSummary(root, url);
 
   const matches: Array<{ route: RouteInfo; params: Record<string, string | string[]> }> = [];
   for (const route of routes) {
@@ -303,6 +306,7 @@ export async function explainRoute(
       middleware: [],
       dataFetching: [],
       serverRoutes: [],
+      renderMode,
       notes: [`No page matched "${url}".`, ...suggestRoutes(url, routes).map((s) => `Did you mean ${s}?`)],
     };
   }
@@ -370,6 +374,7 @@ export async function explainRoute(
     middleware,
     dataFetching,
     serverRoutes: mappedApis,
+    renderMode,
     notes,
     alternatives:
       matches.length > 1
