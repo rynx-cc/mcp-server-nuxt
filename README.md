@@ -1,164 +1,31 @@
 <div align="center">
+
 <h1>mcp-server-nuxt</h1>
 
-A production-ready Model Context Protocol server that gives LLMs Nuxt's resolved state.
+<p>Give your AI agent Nuxt's resolved view of a project: routes, layouts, middleware, auto-imports, layers, and Nitro endpoints.<br/>No dev server. No <code>nuxi prepare</code>.</p>
 
 [![npm version](https://img.shields.io/npm/v/mcp-server-nuxt?style=flat-square&color=00DC82&label=npm)](https://www.npmjs.com/package/mcp-server-nuxt)
 [![npm downloads](https://img.shields.io/npm/dm/mcp-server-nuxt?style=flat-square&color=00DC82)](https://www.npmjs.com/package/mcp-server-nuxt)
-[![license](https://img.shields.io/npm/l/mcp-server-nuxt?style=flat-square&color=gray)](./LICENSE)
 [![CI](https://github.com/rynx-cc/mcp-server-nuxt/actions/workflows/ci.yml/badge.svg)](https://github.com/rynx-cc/mcp-server-nuxt/actions/workflows/ci.yml)
 [![node](https://img.shields.io/node/v/mcp-server-nuxt?style=flat-square&color=blue)](https://nodejs.org)
-
-Generic LLMs get file-based routing, auto-imports, `extends` layers, and Nitro wrong more often than anything else in Nuxt.
+[![license](https://img.shields.io/npm/l/mcp-server-nuxt?style=flat-square&color=gray)](./LICENSE)
 
 </div>
 
----
+<p align="center">
+  <img src="./docs/explain-route.png" alt="explain_route resolving /users/42: page, parent page, layout, middleware order, data fetching and server route" width="760" />
+</p>
 
-## 30-second setup
-
-**Cursor** — add `.cursor/mcp.json` in your Nuxt app (absolute path required):
-
-```json
-{
-  "mcpServers": {
-    "mcp-server-nuxt": {
-      "command": "npx",
-      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
-    }
-  }
-}
-```
-
-**Claude Desktop** — edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/`; Windows: `%APPDATA%\Claude\`), same shape:
-
-```json
-{
-  "mcpServers": {
-    "mcp-server-nuxt": {
-      "command": "npx",
-      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
-    }
-  }
-}
-```
-
-Restart the client, then ask:
-
-> What routes does this project have?
-
-Example reply (shape from `list_routes`):
-
-```json
-{
-  "count": 4,
-  "total": 4,
-  "routes": [
-    { "path": "/", "file": "app/pages/index.vue", "params": [] },
-    { "path": "/about", "file": "app/pages/about.vue", "params": [] },
-    { "path": "/users/:id", "file": "app/pages/users/[id].vue", "params": ["id"] },
-    { "path": "/blog/:slug?", "file": "app/pages/blog/[...slug].vue", "params": ["slug"] }
-  ]
-}
-```
-
-Writes stay off until you pass `--allow-writes` or set `MCP_NUXT_ALLOW_WRITES=1`. Full client configs (VS Code, Windows `cmd` wrapper) are below.
-
----
-
-## Why an MCP server for Nuxt?
-
-A generic AI agent looking at a Nuxt repo sees a directory tree. It does not see:
-
-- `pages/users/[id].vue` maps to `/users/:id`, or the `definePageMeta` middleware and layout contract.
-- `components/base/BaseButton.vue` is available as `<BaseButton>` with no import statement.
-- `composables/useFoo.ts` exports `useFoo()`, typed and callable anywhere.
-- `extends: ['../ui-kit']` layers an override chain of components, pages, and config over the app.
-- `server/api/hello.get.ts` registers `GET /api/hello` in the Nitro runtime.
-
-Without that context the model guesses. It invents import paths, misnames auto-imported components, and misreads layer precedence. The gap is between the source tree and Nuxt's resolved runtime state.
-
-`mcp-server-nuxt` exposes that resolved state through **27 tools** and **7 read-only resources** over MCP (core MVP: 15 tools / 5 resources — see [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md)). It reads Nuxt's own output (`loadNuxtConfig`, `.nuxt/`) rather than guessing from filenames alone.
-
-### Design principles
-
-| Principle | What it means in code |
-| --- | --- |
-| Deep Nuxt Kit integration | `loadNuxtConfig()` and `.nuxt/` build outputs first, with a source-level parser as fallback |
-| Layer-aware | Resolves the `extends` graph and tags each route, component, and composable with its origin layer |
-| Auto-imports registry | Serves the auto-imports index with source paths and TypeScript signatures from `.nuxt/imports.d.ts` |
-| Write protection | Mutation tools default to `dry-run` and require `--allow-writes` |
-| Strict TypeScript | `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride` |
-
-### FAQ
-
-**Q: How does that compare to the Nuxt DevTools MCP server?**
-
-**A:** Standalone vs Runtime.
-
-DevTools-style MCPs (for example `nuxt-mcp-dev`) attach to the Nuxt DevServer. The AI only sees live project context while that server is up. If the repo was just cloned, dependencies are missing, or nobody has run `npm run dev`, the agent is effectively blind.
-
-`mcp-server-nuxt` is a standalone CLI (`npx mcp-server-nuxt /path`). It has no DevServer prerequisite. The agent can read the project's resolved fundamentals before the app is started.
-
-**Q: What is it good for?**
-
-**A:** Giving an agent Nuxt's resolved view of a project: route maps, layer precedence, auto-imports with types, Nitro endpoints, module status, and (optionally) dry-run scaffolding for pages, components, and server handlers — without requiring `npm run dev`.
-
----
+<p align="center"><sub>An agent asking <code>explain_route</code> what happens when someone opens <code>/users/42</code>.</sub></p>
 
 ## Quick start
 
-Prerequisites: Node.js 18 or newer. Works with npm, pnpm, or bun.
-
-Tested on macOS and Linux. Windows is not officially supported yet.
-
-```bash
-# one-shot (no install)
-npx -y mcp-server-nuxt@latest /absolute/path/to/your/nuxt/app
-pnpm dlx mcp-server-nuxt@latest /absolute/path/to/your/nuxt/app
-bunx mcp-server-nuxt@latest /absolute/path/to/your/nuxt/app
-
-# or install globally
-npm install -g mcp-server-nuxt
-# pnpm add -g mcp-server-nuxt
-# bun add -g mcp-server-nuxt
-mcp-server-nuxt /absolute/path/to/your/nuxt/app
-```
-
-The server speaks MCP over `stdio`; it is not a web service. MCP clients should pass an **absolute** project path (their working directory is often undefined).
-
-To run from a local checkout:
-
-```bash
-git clone https://github.com/rynx-cc/mcp-server-nuxt.git
-cd mcp-server-nuxt
-npm install
-npm run build
-node dist/index.js --project /absolute/path/to/your/nuxt/app
-```
-
-```bash
-mcp-server-nuxt --help
-mcp-server-nuxt --version
-mcp-server-nuxt --project /absolute/path/to/app --allow-writes
-```
-
-Omit the path to use the current directory. Pass `--allow-writes`, or set `MCP_NUXT_ALLOW_WRITES=1`, to enable write tools. See [Write protection](#write-protection).
-
----
-
-## Client configuration
-
-Replace `/absolute/path/to/your/nuxt/app` with the real absolute path to the Nuxt project you want the agent to inspect.
-
-Start **without** write access. Enable `MCP_NUXT_ALLOW_WRITES` only when you want mutation tools to leave dry-run mode.
-
-### Cursor (`.cursor/mcp.json`)
+Add this to `.cursor/mcp.json` (Cursor), `.mcp.json` (Claude Code), or your client's MCP config:
 
 ```json
 {
   "mcpServers": {
-    "mcp-server-nuxt": {
+    "nuxt": {
       "command": "npx",
       "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
     }
@@ -166,193 +33,38 @@ Start **without** write access. Enable `MCP_NUXT_ALLOW_WRITES` only when you wan
 }
 ```
 
-Optional writes:
+Restart your client and ask something like:
 
-```json
-{
-  "mcpServers": {
-    "mcp-server-nuxt": {
-      "command": "npx",
-      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"],
-      "env": {
-        "MCP_NUXT_ALLOW_WRITES": "1"
-      }
-    }
-  }
-}
-```
+> What happens when someone opens /users/42?
 
-### Claude Desktop
+Requirements: Node.js 18+, macOS or Linux. Write tools stay in dry-run mode until you [enable writes](#write-protection).
 
-Config file locations:
+## Why
 
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+A generic agent sees a Nuxt repo as a folder tree. It doesn't know that:
 
-Claude Desktop expects **strict JSON** (no comments).
+- `pages/users/[id].vue` serves `/users/:id`, and which layout and middleware `definePageMeta` adds
+- `components/base/BaseButton.vue` is usable as `<BaseButton>` with no import
+- `composables/useFoo.ts` makes `useFoo()` available everywhere
+- `extends: ['../ui-kit']` layers components, pages, and config over your app
+- `server/api/hello.get.ts` registers `GET /api/hello`
 
-```json
-{
-  "mcpServers": {
-    "mcp-server-nuxt": {
-      "command": "npx",
-      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
-    }
-  }
-}
-```
+So it guesses, and invents import paths, misnames components, and misreads layer precedence. `mcp-server-nuxt` reads Nuxt's own config loader and `.nuxt/` output (with a source-level fallback) and hands the agent the real answers through **25 tools** and **7 read-only resources**.
 
-On Windows, if `npx` fails with `spawn npx ENOENT`, wrap it:
+It runs as a standalone CLI, so it works on a freshly cloned repo before anyone has installed dependencies or started `npm run dev`.
 
-```json
-{
-  "mcpServers": {
-    "mcp-server-nuxt": {
-      "command": "cmd",
-      "args": [
-        "/c",
-        "npx",
-        "-y",
-        "mcp-server-nuxt@latest",
-        "C:/absolute/path/to/your/nuxt/app"
-      ]
-    }
-  }
-}
-```
+## Highlight: `explain_route`
 
-Restart Claude Desktop after saving. Prefer forward slashes in Windows paths inside JSON.
+Most tools tell you which routes exist. `explain_route` tells you what actually happens for one real URL.
 
-### VS Code (GitHub Copilot MCP)
-
-In `.vscode/mcp.json` (or user MCP settings):
-
-```json
-{
-  "servers": {
-    "mcp-server-nuxt": {
-      "command": "npx",
-      "args": ["-y", "mcp-server-nuxt@latest", "--project", "/absolute/path/to/your/nuxt/app"]
-    }
-  }
-}
-```
-
-### Claude Code
-
-Add an MCP server in Claude Code settings (or project `.mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "mcp-server-nuxt": {
-      "command": "npx",
-      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
-    }
-  }
-}
-```
-
-### Windsurf
-
-In Windsurf MCP settings (Cascade → MCP), add:
-
-```json
-{
-  "mcpServers": {
-    "mcp-server-nuxt": {
-      "command": "npx",
-      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"]
-    }
-  }
-}
-```
-
----
-
-## Core architecture and resources
-
-The server exposes read-only resources (`resources/*`) for large, cacheable datasets, and tools (`tools/call`) for targeted queries and mutations. Resources carry the bulk context so the agent does not re-scan files each turn.
-
-```
-                      ┌─────────────────────────────────────────┐
-                      │           mcp-server-nuxt               │
-                      │                                         │
-  MCP client ───────► │  ┌──────────────┐   ┌───────────────┐   │
-  (Claude / Cursor)   │  │  24 Tools    │   │  7 Resources  │   │
-                      │  └──────┬───────┘   └───────┬───────┘   │
-                      │         │                   │           │
-                      │         ▼                   ▼           │
-                      │  NuxtProjectContext (cached snapshot)   │
-                      └─────────┬───────────────────┬───────────┘
-                                │                   │
-                    @nuxt/kit loadNuxtConfig    .nuxt/imports.d.ts
-                    extends resolution         .nuxt/tsconfig.json
-```
-
-### Resources
-
-| URI | Content |
-| --- | --- |
-| `nuxt://project/overview` | Project summary: Nuxt version, layers, directories, and route/component/composable/module counts |
-| `nuxt://project/routes` | Resolved route map: files, params, middleware, layouts, children |
-| `nuxt://project/config` | Resolved `nuxt.config` object via `loadNuxtConfig`, with a source-level fallback |
-| `nuxt://project/modules` | Installed modules with status, source, and configuration |
-| `nuxt://project/layers` | `extends` hierarchy with override priority order and per-layer config |
-| `nuxt://project/auto-imports` | Parsed registry of auto-imported symbols with source paths and TypeScript signatures |
-| `nuxt://project/types` | Raw generated types (`.nuxt/imports.d.ts`, `.nuxt/types`, schema) |
-
-### Layers and auto-imports
-
-`nuxt://project/layers` resolves the `extends` graph and orders it by precedence (`project > later extends > earlier extends`), so the agent knows which `BaseButton.vue` wins when several layers define one.
-
-`nuxt://project/auto-imports` reads `.nuxt/imports.d.ts` and returns the registry of auto-imported symbols (`ref`, `useFoo`, `BaseButton`) with their file origins and type signatures.
-
-`nuxt://project/auto-imports` needs the app to have been prepared or built (`nuxi prepare` or `nuxi build`) so `.nuxt/imports.d.ts` exists. Other tools still work from source-level parsing when `.nuxt/` is missing.
-
----
-
-## Tools reference
-
-Aligned with Unreleased (**27 tools**). Full mapping: [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md).
-
-### Project and core
-
-| Tool | Description |
-| --- | --- |
-| `get_project_overview` | Summary: Nuxt version, layers, module/route/component counts, directories |
-| `analyze_project` | Health analysis with dependency warnings, pagination, and prepare hints |
-| `read_config` | Read the resolved `nuxt.config`, with dot-notation key filtering |
-| `update_config` | Update a config value, keep comments and formatting, return a diff |
-| `list_modules` | Active and inactive Nuxt modules with version, source, and config |
-| `add_nuxt_module` | Add a module to the `modules` array, with optional options |
-| `inspect_layers` | Resolve and return the full `extends` hierarchy |
-
-### Routing and architecture
-
-| Tool | Description |
-| --- | --- |
-| `list_routes` | File-based, dynamic, optional, catch-all, and nested routes |
-| `get_route` | One route by path, e.g. `/users/:id` |
-| `explain_route` | Explain a concrete URL (params, layout, middleware, data fetching, `/api` mapping, render mode) |
-| `explain_render_mode` | Resolve a URL's Nitro render mode from `routeRules` (ssr/spa/prerender/isr/swr/static) plus cache, redirect, cors, headers, proxy |
-| `add_route` | Scaffold a page under `pages/` following Nuxt conventions |
-
-Example `explain_route` input/output:
-
-```json
+```jsonc
 // input
 { "route": "/users/42" }
 
 // output (abridged)
 {
   "matched": true,
-  "page": {
-    "file": "pages/users/[id].vue",
-    "routeName": "users-id",
-    "pattern": "/users/:id",
-    "params": { "id": "42" }
-  },
+  "page": { "file": "pages/users/[id].vue", "pattern": "/users/:id", "params": { "id": "42" } },
   "parents": [{ "file": "pages/users.vue", "pattern": "/users" }],
   "layout": { "name": "default", "file": "layouts/default.vue" },
   "middleware": [
@@ -362,69 +74,176 @@ Example `explain_route` input/output:
   "dataFetching": [
     { "composable": "useFetch", "keyOrUrl": "/api/hello", "line": 4, "file": "pages/users/[id].vue" }
   ],
-  "serverRoutes": [
-    { "url": "/api/hello", "file": "server/api/hello.get.ts", "method": "GET" }
-  ],
-  "renderMode": { "mode": "ssr", "cache": { "swr": null, "isr": null, "maxAge": null } },
-  "notes": []
+  "serverRoutes": [{ "url": "/api/hello", "file": "server/api/hello.get.ts", "method": "GET" }]
 }
 ```
-| `inspect_route_meta` | `definePageMeta`, layout, middleware, and props/emits/slots for a page |
-| `list_server_routes` | Nitro endpoints, middleware, and plugins with method and middleware chain |
-| `find_api_callers` | Find every caller of a server API route (`useFetch` / `$fetch` / `useAsyncData($fetch)`) by file path or URL |
-| `scaffold_nitro_api` | Generate an H3 handler with optional Zod body validation |
 
-### Components, composables, and auto-imports
+Middleware comes back in run order (global first, then named), catch-all params come back as arrays, and an unmatched URL returns suggestions.
 
-| Tool | Description |
+## Tools
+
+<details open>
+<summary><b>Routing</b></summary>
+
+| Tool | What it does |
 | --- | --- |
-| `list_components` | Components from `.nuxt/components.d.ts` when it exists, otherwise `components` and `components.dirs` (prefix, `pathPrefix`, extensions, `~` / `@` / `~~` / `@@`) |
-| `inspect_component` | One component by that auto-imported name: props, emits, slots |
-| `generate_component` | Generate a typed Vue SFC |
+| `explain_route` | Resolve one URL: page, parents, layout, middleware order, data fetching, `/api` files |
+| `list_routes` | All routes: dynamic, optional, catch-all, nested |
+| `get_route` | One route by pattern, e.g. `/users/:id` |
+| `inspect_route_meta` | `definePageMeta`, layout, middleware, props/emits/slots of a page |
+| `add_route` ✏️ | Scaffold a page under `pages/` |
+
+</details>
+
+<details open>
+<summary><b>Server (Nitro)</b></summary>
+
+| Tool | What it does |
+| --- | --- |
+| `list_server_routes` | Endpoints, server middleware, and plugins with method and middleware chain |
+| `scaffold_nitro_api` ✏️ | Generate an H3 handler with optional Zod body validation |
+
+</details>
+
+<details open>
+<summary><b>Components, composables, auto-imports</b></summary>
+
+| Tool | What it does |
+| --- | --- |
+| `list_components` | Components from `.nuxt/components.d.ts`, or from `components` / `components.dirs` config |
+| `inspect_component` | Props, emits, and slots of one component |
+| `generate_component` ✏️ | Generate a typed Vue SFC |
 | `list_composables` | User-defined and auto-imported composables |
-| `generate_composable` | Scaffold a typed `useXxx` composable under `composables/` |
-| `get_auto_imports` | The `.nuxt/imports.d.ts` registry with source paths and signatures |
-| `get_type_info` | Raw generated type info (`.nuxt/types`, schema) |
+| `generate_composable` ✏️ | Scaffold a typed `useXxx` composable |
+| `get_auto_imports` | Auto-import registry with source paths and signatures |
+| `get_type_info` | Generated type info (`.nuxt/types`, schema) |
 
-### Quality and diagnostics
+</details>
 
-| Tool | Description |
+<details open>
+<summary><b>Project and config</b></summary>
+
+| Tool | What it does |
+| --- | --- |
+| `get_project_overview` | Nuxt version, layers, directories, and counts |
+| `analyze_project` | Health check with dependency warnings and prepare hints |
+| `read_config` | Resolved `nuxt.config`, filterable by dot path |
+| `update_config` ✏️ | Change a config value, keeping comments, and return a diff |
+| `list_modules` | Installed modules with version, source, and options |
+| `add_nuxt_module` ✏️ | Add a module to `modules` |
+| `inspect_layers` | The full `extends` hierarchy in precedence order |
+
+</details>
+
+<details open>
+<summary><b>Quality and search</b></summary>
+
+| Tool | What it does |
 | --- | --- |
 | `check_type_errors` | Run `tsc --noEmit` against `.nuxt/tsconfig.json` |
-| `analyze_bundle_deps` | Classify Nuxt modules vs runtime/dev deps, flag missing or misplaced ones |
-| `search_code` | Search the codebase with line numbers and context lines |
-| `get_nuxt_docs` | Offline Nuxt guidance for routing, nitro, modules, layers |
+| `analyze_bundle_deps` | Flag missing or misplaced dependencies |
+| `search_code` | Search the codebase with line numbers and context |
+| `get_nuxt_docs` | Offline Nuxt guidance for routing, Nitro, modules, layers |
 
----
+</details>
+
+✏️ = write tool, dry-run by default. Full mapping: [docs/SPEC_MATRIX.md](./docs/SPEC_MATRIX.md).
+
+## Resources
+
+Large, cacheable context is served as read-only resources so the agent doesn't re-scan files every turn.
+
+| URI | Content |
+| --- | --- |
+| `nuxt://project/overview` | Nuxt version, layers, directories, counts |
+| `nuxt://project/routes` | Route map with files, params, middleware, layouts, children |
+| `nuxt://project/config` | Resolved `nuxt.config` |
+| `nuxt://project/modules` | Modules with status, source, and options |
+| `nuxt://project/layers` | `extends` hierarchy with override order (`project > later extends > earlier extends`) |
+| `nuxt://project/auto-imports` | Auto-imported symbols with source paths and signatures |
+| `nuxt://project/types` | Raw generated types |
+
+`auto-imports` and `types` need `.nuxt/` to exist (`nuxi prepare` or a build). Everything else falls back to reading source.
 
 ## Write protection
 
-`update_config`, `add_route`, `add_nuxt_module`, `scaffold_nitro_api`, and `generate_component` all follow the same contract:
+`add_route`, `scaffold_nitro_api`, `generate_component`, `generate_composable`, `update_config`, and `add_nuxt_module` all work the same way:
 
-1. `dryRun` is `true` by default. The tool returns the planned file or a diff without writing to disk.
-2. A real write needs `dryRun: false` and a server started with writes enabled:
-
-```bash
-# CLI flag (path first, then flag)
-mcp-server-nuxt /absolute/path/to/app --allow-writes
-
-# or environment variable
-MCP_NUXT_ALLOW_WRITES=1 mcp-server-nuxt /absolute/path/to/app
-```
+1. They default to `dryRun: true` and return the planned file or diff without touching disk.
+2. A real write needs `dryRun: false` **and** a server started with writes enabled.
+3. Config edits only touch the affected lines and always return a diff.
 
 ```json
 {
-  "env": {
-    "MCP_NUXT_ALLOW_WRITES": "1"
+  "mcpServers": {
+    "nuxt": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-nuxt@latest", "/absolute/path/to/your/nuxt/app"],
+      "env": { "MCP_NUXT_ALLOW_WRITES": "1" }
+    }
   }
 }
 ```
 
-3. Config edits touch only the affected lines. Comments and unrelated keys stay, and every change returns a diff you can review.
+Or on the command line: `mcp-server-nuxt /absolute/path/to/app --allow-writes`.
 
-Dry-run first, check the diff, then enable writes.
+## Client setup
 
----
+The JSON in [Quick start](#quick-start) works for Cursor, Claude Code, Claude Desktop, and Windsurf. Always pass an **absolute** project path, since MCP clients often start servers with an undefined working directory.
+
+<details>
+<summary><b>Where the config file lives</b></summary>
+
+| Client | File |
+| --- | --- |
+| Cursor | `.cursor/mcp.json` in the project, or `~/.cursor/mcp.json` |
+| Claude Code | `.mcp.json` in the project, or Claude Code settings |
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` (strict JSON, no comments) |
+| Windsurf | Cascade → MCP settings |
+
+</details>
+
+<details>
+<summary><b>VS Code (GitHub Copilot)</b></summary>
+
+VS Code uses `servers` instead of `mcpServers`. In `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "nuxt": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-nuxt@latest", "--project", "/absolute/path/to/your/nuxt/app"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>CLI and other package managers</b></summary>
+
+```bash
+npx -y mcp-server-nuxt@latest /absolute/path/to/app
+pnpm dlx mcp-server-nuxt@latest /absolute/path/to/app
+bunx mcp-server-nuxt@latest /absolute/path/to/app
+
+npm install -g mcp-server-nuxt
+mcp-server-nuxt --help
+```
+
+The project path can be passed positionally or with `--project`. Omit it to use the current directory. The server speaks MCP over stdio; it is not a web service.
+
+</details>
+
+## FAQ
+
+**How is this different from DevTools-style Nuxt MCP servers?**
+Those attach to a running dev server, so the agent sees nothing until `npm run dev` is up. `mcp-server-nuxt` is a standalone CLI that reads the project directly, so it works on a fresh clone, in CI, or anywhere the app isn't running.
+
+**Does it support Windows?**
+Not officially yet. It's tested on macOS and Linux.
 
 ## Contributing
 
@@ -434,16 +253,14 @@ Pull requests are welcome.
 git clone https://github.com/rynx-cc/mcp-server-nuxt.git
 cd mcp-server-nuxt
 npm install
-npm run typecheck   # tsc --noEmit (strict)
-npm test            # vitest
-npm run build       # tsup
+npm run typecheck && npm test && npm run build
 ```
 
-- Follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`).
-- Add tests for new tools and resources under `tests/`.
-- Keep `@nuxt/kit` an optional dependency; each integration needs a fallback.
-- Write tools default to `dry-run` and go through `WriteGuard`.
+- Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`).
+- Add tests under `tests/` for new tools and resources.
+- Keep `@nuxt/kit` optional; every integration needs a fallback.
+- Write tools default to dry-run and go through `WriteGuard`.
 
 ## License
 
-[MIT](./LICENSE) © 2026 mcp-server-nuxt contributors.
+[MIT](./LICENSE)
