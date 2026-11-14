@@ -2,14 +2,16 @@
  * Read, parse and safely modify `nuxt.config.*` files.
  *
  * Resolution strategy:
- *  1. Try `@nuxt/kit`'s `loadNuxtConfig()` for fully-resolved config values.
- *  2. Fall back to a lightweight source-level parser so the server still works
- *     when the project's dependencies are not installed or `@nuxt/kit` fails.
+ *  1. Load `@nuxt/kit` from the target project's own `node_modules` and call
+ *     `loadNuxtConfig()` (Kit 3 for a Nuxt 3 app, Kit 4 for a Nuxt 4 app).
+ *  2. If that project cannot resolve Kit, try the server's bundled optional copy.
+ *  3. Fall back to a source-level parser when Kit is missing or throws.
+ *     The Kit error is written to stderr so the fallback is not silent.
  */
 import { promises as fs, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { ConfigDiff } from '../types.js';
-import { installNode18ImportMetaPaths } from './node18-import-meta.js';
+import { debugKit, importNuxtKit } from './nuxt-kit.js';
 
 const CONFIG_FILENAMES = [
   'nuxt.config.ts',
@@ -90,23 +92,43 @@ export async function loadNuxtConfig(projectRoot: string): Promise<LoadedNuxtCon
   // Calling kit against bare fixtures (no local node_modules/nuxt) can hang or be very slow.
   const projectHasNuxt = existsSync(path.join(projectRoot, 'node_modules', 'nuxt', 'package.json'));
   if (projectHasNuxt) {
-    try {
-      await installNode18ImportMetaPaths();
-      const kit = await import('@nuxt/kit');
-      if (typeof kit.loadNuxtConfig === 'function') {
-        const value = (await kit.loadNuxtConfig({
+    const imported = await importNuxtKit<{
+      loadNuxtConfig?: (options?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+    }>(projectRoot);
+    if (imported && typeof imported.kit.loadNuxtConfig === 'function') {
+      try {
+        const value = await imported.kit.loadNuxtConfig({
+          cwd: projectRoot,
           rootDir: projectRoot,
           overrides: { _mcpServerNuxt: true },
-        })) as Record<string, unknown>;
-        return {
-          value: stripInternalKeys(value),
-          source,
-          configPath,
-          sourceKind: 'resolved',
-        };
+        });
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          return {
+            value: stripInternalKeys(value),
+            source,
+            configPath,
+            sourceKind: 'resolved',
+          };
+        }
+        debugKit(
+          `@nuxt/kit (${imported.source}, ${imported.from}) loadNuxtConfig returned a non-object. Falling back to the source parser.`,
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // The project's Kit matches its Nuxt major. Retrying with the server's
+        // other major would hide that error and can hang, so go to the parser.
+        debugKit(
+          `@nuxt/kit (${imported.source}, ${imported.from}) loadNuxtConfig failed: ${message}. Falling back to the source parser.`,
+        );
       }
-    } catch {
-      // Fall through to source-level parsing.
+    } else if (!imported) {
+      debugKit(
+        `@nuxt/kit could not be loaded for ${projectRoot}. Falling back to the source parser.`,
+      );
+    } else {
+      debugKit(
+        `@nuxt/kit (${imported.source}, ${imported.from}) does not export loadNuxtConfig. Falling back to the source parser.`,
+      );
     }
   }
 

@@ -129,7 +129,7 @@ Middleware comes back in run order (global first, then named), catch-all params 
 | --- | --- |
 | `get_project_overview` | Nuxt version, layers, directories, and counts |
 | `analyze_project` | Health check with dependency warnings and prepare hints |
-| `read_config` | Resolved `nuxt.config`, filterable by dot path |
+| `read_config` | Resolved `nuxt.config` from the project's own `@nuxt/kit` when Nuxt is installed, otherwise a source parse. Filterable by dot path |
 | `update_config` ✏️ | Change a config value, keeping comments, and return a diff |
 | `list_modules` | Installed modules with version, source, and options |
 | `add_nuxt_module` ✏️ | Add a module to `modules` |
@@ -159,7 +159,7 @@ Large, cacheable context is served as read-only resources so the agent doesn't r
 | --- | --- |
 | `nuxt://project/overview` | Nuxt version, layers, directories, counts |
 | `nuxt://project/routes` | Route map with files, params, middleware, layouts, children |
-| `nuxt://project/config` | Resolved `nuxt.config` |
+| `nuxt://project/config` | Resolved `nuxt.config` via the project's `@nuxt/kit`, with a source-level fallback |
 | `nuxt://project/modules` | Modules with status, source, and options |
 | `nuxt://project/layers` | `extends` hierarchy with override order (`project > later extends > earlier extends`) |
 | `nuxt://project/auto-imports` | Auto-imported symbols with source paths and signatures |
@@ -260,7 +260,7 @@ npm run typecheck && npm test && npm run build
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`).
 - Add tests under `tests/` for new tools and resources.
-- Keep `@nuxt/kit` optional; every integration needs a fallback.
+- Keep `@nuxt/kit` optional; every integration needs a fallback. Resolved config loads Kit from the target project's `node_modules` first (Kit 3 for Nuxt 3, Kit 4 for Nuxt 4), then this package's optional Kit 3, then the source parser. Kit errors are logged to stderr.
 - Write tools default to dry-run and go through `WriteGuard`.
 
 ## License

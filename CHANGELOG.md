@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- `loadNuxtConfig` loads `@nuxt/kit` from the target project's `node_modules` before this server's optional Kit 3 copy, so Nuxt 3 and Nuxt 4 each use a matching Kit. `cwd` and `rootDir` are both the project root. Kit errors are logged to stderr and the source parser still runs. The optional range stays `^3.14.0`
+
 ## 0.5.2 - 2026-11-13
 
 ### Added
