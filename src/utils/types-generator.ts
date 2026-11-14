@@ -5,13 +5,11 @@
  * Writes to a cache directory (not the project `.nuxt`) unless writes are allowed.
  */
 import { createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
 import { existsSync, promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { findConfigFile } from './config-reader.js';
-import { installNode18ImportMetaPaths } from './node18-import-meta.js';
+import { importNuxtKit } from './nuxt-kit.js';
 
 export type TypesSource = 'project' | 'cache' | 'generated' | 'fallback' | 'none';
 
@@ -110,15 +108,11 @@ async function writeMeta(dir: string, meta: TypesMeta): Promise<void> {
 }
 
 async function loadKit(projectRoot: string): Promise<NuxtKitLike> {
-  await installNode18ImportMetaPaths();
-  const require = createRequire(path.join(projectRoot, 'package.json'));
-  try {
-    const kitPath = require.resolve('@nuxt/kit');
-    return (await import(pathToFileURL(kitPath).href)) as NuxtKitLike;
-  } catch {
-    // Fall back to the optional dependency shipped with mcp-server-nuxt.
-    return (await import('@nuxt/kit')) as NuxtKitLike;
+  const imported = await importNuxtKit<NuxtKitLike>(projectRoot);
+  if (!imported) {
+    throw new Error(`@nuxt/kit could not be loaded for ${projectRoot}`);
   }
+  return imported.kit;
 }
 
 async function generateTypes(
