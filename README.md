@@ -168,7 +168,7 @@ Large, cacheable context is served as read-only resources so the agent doesn't r
 | `nuxt://project/routes` | Route map with files, params, middleware, layouts, children |
 | `nuxt://project/config` | Resolved `nuxt.config` via the project's `@nuxt/kit`, with a source-level fallback |
 | `nuxt://project/modules` | Modules with status, source, and options |
-| `nuxt://project/layers` | `extends` hierarchy with override order (`project > later extends > earlier extends`) |
+| `nuxt://project/layers` | Layer hierarchy with override order (`project > layers/* > earlier extends > later extends`) |
 | `nuxt://project/auto-imports` | Auto-imported symbols with source paths and signatures |
 | `nuxt://project/types` | Raw generated types |
 

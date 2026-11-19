@@ -36,7 +36,7 @@ describe('layers tooling', () => {
 
     const ctx = new NuxtProjectContext(path.join(base, 'root'));
     const layers = await ctx.layers();
-    expect(layers.map((l) => l.name)).toEqual(['root-app', 'layer-b', 'layer-a']);
+    expect(layers.map((l) => l.name)).toEqual(['root-app', 'layer-a', 'layer-b']);
 
     const server = new McpServer({ name: 'test', version: '0.0.0' });
     registerLayerTools(server, ctx);
@@ -46,5 +46,15 @@ describe('layers tooling', () => {
     expect(
       (server as unknown as { _registeredResources: Record<string, unknown> })._registeredResources['nuxt://project/layers'],
     ).toBeTruthy();
+  });
+
+  it('reads a root extends given as a string', async () => {
+    await write(path.join(base, 'root/package.json'), JSON.stringify({ name: 'root-app' }));
+    await write(path.join(base, 'root/nuxt.config.ts'), "export default defineNuxtConfig({ extends: '../layer-a' })");
+    await write(path.join(base, 'layer-a/package.json'), JSON.stringify({ name: 'layer-a' }));
+    await write(path.join(base, 'layer-a/nuxt.config.ts'), 'export default defineNuxtConfig({})');
+
+    const layers = await new NuxtProjectContext(path.join(base, 'root')).layers();
+    expect(layers.map((l) => l.name)).toEqual(['root-app', 'layer-a']);
   });
 });

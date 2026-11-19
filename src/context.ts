@@ -167,7 +167,8 @@ export class NuxtProjectContext {
       return this.layersCache;
     }
     const ext = config.value['extends'];
-    const entries = Array.isArray(ext) ? ext.filter((e): e is string => typeof e === 'string') : [];
+    const list = typeof ext === 'string' ? [ext] : Array.isArray(ext) ? ext : [];
+    const entries = list.filter((e): e is string => typeof e === 'string');
     this.layersCache = await resolveLayers(this.root, entries);
     return this.layersCache;
   }

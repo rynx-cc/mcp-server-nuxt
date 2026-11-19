@@ -20,7 +20,7 @@ async function write(file: string, content: string) {
 }
 
 describe('resolveLayers', () => {
-  it('resolves extends in priority order (project > later extends > earlier extends)', async () => {
+  it('resolves extends in priority order (project > earlier extends > later extends)', async () => {
     await write(path.join(base, 'root/package.json'), JSON.stringify({ name: 'root-app' }));
     await write(
       path.join(base, 'root/nuxt.config.ts'),
@@ -36,8 +36,8 @@ describe('resolveLayers', () => {
 
     expect(layers).toHaveLength(3);
     expect(layers[0]).toMatchObject({ cwd: root, name: 'root-app', priority: 0 });
-    expect(layers[1]).toMatchObject({ name: 'layer-b', priority: 1 });
-    expect(layers[2]).toMatchObject({ name: 'layer-a', priority: 2 });
+    expect(layers[1]).toMatchObject({ name: 'layer-a', priority: 1 });
+    expect(layers[2]).toMatchObject({ name: 'layer-b', priority: 2 });
     expect(layers[0]!.children).toHaveLength(2);
   });
 
@@ -60,10 +60,36 @@ describe('resolveLayers', () => {
     const layers = await resolveLayers(path.join(base, 'root'), ['../layer-a', '../layer-b']);
 
     const names = layers.map((l) => l.name);
-    expect(names).toEqual(['root-app', 'layer-b', 'layer-a', 'layer-c']);
+    expect(names).toEqual(['root-app', 'layer-a', 'layer-c', 'layer-b']);
     const priorities = layers.map((l) => l.priority);
     expect(new Set(priorities).size).toBe(priorities.length);
     expect(priorities).toEqual([0, 1, 2, 3]);
+  });
+
+  it('registers layers/* directories with a nuxt.config before extends, Z to A', async () => {
+    await write(path.join(base, 'root/package.json'), JSON.stringify({ name: 'root-app' }));
+    await write(
+      path.join(base, 'root/nuxt.config.ts'),
+      "export default defineNuxtConfig({ extends: ['../layer-a'] })",
+    );
+    await write(path.join(base, 'root/layers/base/nuxt.config.ts'), 'export default defineNuxtConfig({})');
+    await write(path.join(base, 'root/layers/base-theme/nuxt.config.ts'), 'export default defineNuxtConfig({})');
+    await write(path.join(base, 'root/layers/zeta/nuxt.config.ts'), 'export default defineNuxtConfig({})');
+    await write(path.join(base, 'root/layers/.hidden/nuxt.config.ts'), 'export default defineNuxtConfig({})');
+    await write(path.join(base, 'root/layers/no-config/pages/index.vue'), '<template><div /></template>');
+    await write(path.join(base, 'layer-a/package.json'), JSON.stringify({ name: 'layer-a' }));
+    await write(path.join(base, 'layer-a/nuxt.config.ts'), 'export default defineNuxtConfig({})');
+
+    const layers = await resolveLayers(path.join(base, 'root'), ['../layer-a']);
+
+    expect(layers.map((l) => [l.name, l.priority])).toEqual([
+      ['root-app', 0],
+      ['zeta', 1],
+      ['base', 2],
+      ['base-theme', 3],
+      ['layer-a', 4],
+    ]);
+    expect(layers[0]!.children.map((l) => l.name)).toEqual(['layer-a']);
   });
 
   it('returns only the root when there are no extends', async () => {

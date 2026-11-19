@@ -5,10 +5,11 @@
  * priority-ordered list of layers. Priority 0 is the local project (highest
  * priority); each subsequently listed `extends` entry and its own sub-layers
  * follow in decreasing priority order. Each layer exposes a `children` tree
- * for rendering the hierarchy.
+ * for rendering the hierarchy. Auto-registered `layers/*` directories come
+ * right after the project, Z to A.
  */
 import path from 'node:path';
-import { promises as fs } from 'node:fs';
+import { promises as fs, type Dirent } from 'node:fs';
 import type { LayerInfo } from '../types.js';
 import { findConfigFile, parseConfigSource, type ResolvedLayer } from './config-reader.js';
 
@@ -82,6 +83,21 @@ async function readExtends(configFile: string | null): Promise<string[]> {
   return [];
 }
 
+async function localLayerDirs(root: string): Promise<string[]> {
+  let entries: Dirent[];
+  try {
+    entries = await fs.readdir(path.join(root, 'layers'), { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map((entry) => `${entry.name}/`)
+    .sort((a, b) => b.localeCompare(a))
+    .map((name) => path.join(root, 'layers', name.slice(0, -1)))
+    .filter((dir) => findConfigFile(dir) !== null);
+}
+
 interface PriorityCounter {
   value: number;
 }
@@ -103,7 +119,7 @@ async function resolveLayer(dir: string, counter: PriorityCounter, seen: Set<str
     children: [],
   };
 
-  for (const entry of extendsEntries.slice().reverse()) {
+  for (const entry of extendsEntries) {
     const childDir = await resolveExtendEntry(abs, entry);
     if (!childDir) continue;
     const child = await resolveLayer(childDir, counter, seen);
@@ -140,7 +156,12 @@ export async function resolveLayers(root: string, extendsEntries: string[]): Pro
     for (const child of layer.children) appendTree(child);
   };
 
-  for (const entry of extendsEntries.slice().reverse()) {
+  for (const dir of await localLayerDirs(absRoot)) {
+    const layer = await resolveLayer(dir, counter, seen);
+    if (layer) appendTree(layer);
+  }
+
+  for (const entry of extendsEntries) {
     const childDir = await resolveExtendEntry(absRoot, entry);
     if (!childDir) continue;
     const child = await resolveLayer(childDir, counter, seen);
