@@ -49,6 +49,29 @@ describe('layer-aware listing', () => {
     expect(routes.find((r) => r.path === '/')).toMatchObject({ layer: undefined });
   });
 
+  it('lets a higher-priority layer shadow the same file under pages/', async () => {
+    await write(path.join(base, 'root/pages/index.vue'), '<template><h1>Home</h1></template>');
+    await write(path.join(base, 'layer-a/pages/index.vue'), '<template><h1>A home</h1></template>');
+    await write(path.join(base, 'layer-a/pages/shared.vue'), '<template><h1>A</h1></template>');
+    await write(path.join(base, 'layer-b/pages/shared.vue'), '<template><h1>B</h1></template>');
+    await write(path.join(base, 'layer-b/pages/shared/index.vue'), '<template><h1>B index</h1></template>');
+    await write(path.join(base, 'layer-a/pages/(group)/about.vue'), '<template><h1>A about</h1></template>');
+    await write(path.join(base, 'layer-b/pages/about.vue'), '<template><h1>B about</h1></template>');
+
+    const routes = await listPageRoutes(path.join(base, 'root'), [
+      { cwd: path.join(base, 'layer-a'), name: 'layer-a' },
+      { cwd: path.join(base, 'layer-b'), name: 'layer-b' },
+    ]);
+
+    expect(routes.map((r) => path.relative(base, r.absolutePath)).sort()).toEqual([
+      path.join('layer-a', 'pages', '(group)', 'about.vue'),
+      path.join('layer-a', 'pages', 'shared.vue'),
+      path.join('layer-b', 'pages', 'about.vue'),
+      path.join('layer-b', 'pages', 'shared', 'index.vue'),
+      path.join('root', 'pages', 'index.vue'),
+    ]);
+  });
+
   it('lists composables from layers with layer tags', async () => {
     await write(path.join(base, 'root/composables/useLocal.ts'), 'export function useLocal() {}');
     await write(path.join(base, 'layer-a/composables/useLayer.ts'), 'export function useLayer() {}');

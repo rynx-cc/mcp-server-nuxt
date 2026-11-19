@@ -373,11 +373,16 @@ export async function listPageRoutes(
   const targets = [{ cwd: root, name: undefined as string | undefined }, ...layers.map((l) => ({ cwd: l.cwd, name: l.name }))];
   const routes: RouteInfo[] = [];
   const seen = new Set<string>();
+  // Nuxt keeps one file per path under `pages/`: the highest-priority layer's file wins.
+  const seenPageFiles = new Set<string>();
 
   for (const target of targets) {
+    const { pagesDir } = await resolveSourceDirs(target.cwd);
     for (const route of await listRoutesIn(target.cwd, target.name)) {
-      if (seen.has(route.absolutePath)) continue;
+      const pageFile = relativePath(pagesDir, route.absolutePath);
+      if (seen.has(route.absolutePath) || seenPageFiles.has(pageFile)) continue;
       seen.add(route.absolutePath);
+      seenPageFiles.add(pageFile);
       routes.push(route);
     }
   }
