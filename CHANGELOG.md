@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.1 - 2026-11-19
+
+### Fixed
+- Prefer Kit's resolved `_layers` when Nuxt is installed, so layer discovery matches the target project (thanks [onmax](https://github.com/onmax), [#19](https://github.com/rynx-cc/mcp-server-nuxt/pull/19)).
+- Source-parser layer discovery and order: auto-registered `layers/*` (Z to A) sit after the project and before `extends`, matching Nuxt precedence `project > layers/* > earlier extends > later extends` (thanks [onmax](https://github.com/onmax), [#20](https://github.com/rynx-cc/mcp-server-nuxt/pull/20)).
+- Same relative page under `pages/` across layers: the higher-priority layer's file wins (thanks [onmax](https://github.com/onmax), [#21](https://github.com/rynx-cc/mcp-server-nuxt/pull/21)).
+
+### Known limitations
+- When `extends` explicitly names an auto-discovered `layers/*` directory, source-parser ordering can still differ from Kit; document and track separately.
+- `explain_injections` still ignores string-form `extends` (it reads config through a separate path). Module-added pages are unchanged.
+
 ## 0.9.0 - 2026-11-17
 
 ### Added
