@@ -32,6 +32,13 @@ export interface LoadedNuxtConfig {
   sourceKind: 'resolved' | 'parsed' | 'raw' | 'none';
   /** Error message when resolution failed */
   error?: string;
+  /** Kit's `_layers`, highest priority first */
+  layers?: ResolvedLayer[];
+}
+
+export interface ResolvedLayer {
+  cwd: string;
+  extends: string[];
 }
 
 /** Locate the project root by walking up from `start` looking for nuxt.config.*. */
@@ -108,6 +115,7 @@ export async function loadNuxtConfig(projectRoot: string): Promise<LoadedNuxtCon
             source,
             configPath,
             sourceKind: 'resolved',
+            layers: resolvedLayersOf(value),
           };
         }
         debugKit(
@@ -150,6 +158,19 @@ export async function loadNuxtConfig(projectRoot: string): Promise<LoadedNuxtCon
       error: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+function resolvedLayersOf(value: Record<string, unknown>): ResolvedLayer[] | undefined {
+  const layers = value['_layers'];
+  if (!Array.isArray(layers)) return undefined;
+  const out: ResolvedLayer[] = [];
+  for (const layer of layers as Array<{ cwd?: unknown; config?: { extends?: unknown } }>) {
+    if (typeof layer?.cwd !== 'string') continue;
+    const ext = layer.config?.extends;
+    const entries = typeof ext === 'string' ? [ext] : Array.isArray(ext) ? ext : [];
+    out.push({ cwd: layer.cwd, extends: entries.filter((e): e is string => typeof e === 'string') });
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 function stripInternalKeys(value: Record<string, unknown>): Record<string, unknown> {

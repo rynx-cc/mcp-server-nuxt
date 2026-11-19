@@ -10,7 +10,7 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import type { LayerInfo } from '../types.js';
-import { findConfigFile, parseConfigSource } from './config-reader.js';
+import { findConfigFile, parseConfigSource, type ResolvedLayer } from './config-reader.js';
 
 async function exists(dir: string): Promise<boolean> {
   try {
@@ -74,6 +74,7 @@ async function readExtends(configFile: string | null): Promise<string[]> {
     const source = await fs.readFile(configFile, 'utf8');
     const parsed = parseConfigSource(source);
     const ext = parsed['extends'];
+    if (typeof ext === 'string') return [ext];
     if (Array.isArray(ext)) return ext.filter((e): e is string => typeof e === 'string');
   } catch {
     /* keep empty */
@@ -149,5 +150,34 @@ export async function resolveLayers(root: string, extendsEntries: string[]): Pro
     }
   }
 
+  return result;
+}
+
+export async function layersFromResolved(resolved: ResolvedLayer[]): Promise<LayerInfo[]> {
+  const result: LayerInfo[] = [];
+  for (const [priority, entry] of resolved.entries()) {
+    const cwd = path.resolve(entry.cwd);
+    const configFile = findConfigFile(cwd);
+    result.push({
+      cwd,
+      name: await layerName(cwd),
+      configFile,
+      // Kit keeps `extends` only on the root layer's config.
+      extends: entry.extends.length > 0 ? entry.extends : await readExtends(configFile),
+      priority,
+      children: [],
+    });
+  }
+
+  const realDir = (dir: string) => fs.realpath(dir).catch(() => dir);
+  const byCwd = new Map<string, LayerInfo>();
+  for (const layer of result) byCwd.set(await realDir(layer.cwd), layer);
+  for (const layer of result) {
+    for (const ext of layer.extends) {
+      const dir = await resolveExtendEntry(layer.cwd, ext);
+      const child = dir ? byCwd.get(await realDir(dir)) : undefined;
+      if (child && child.priority > layer.priority) layer.children.push(child);
+    }
+  }
   return result;
 }

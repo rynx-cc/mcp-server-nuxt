@@ -26,7 +26,7 @@ import type {
   RouteInfo,
   ServerRouteInfo,
 } from './types.js';
-import { resolveLayers } from './utils/layers.js';
+import { layersFromResolved, resolveLayers } from './utils/layers.js';
 import { readAutoImports } from './utils/auto-imports.js';
 import { WriteGuard } from './utils/write-guard.js';
 import { resolveSourceDirs, type SourceDirs } from './utils/source-dirs.js';
@@ -162,6 +162,10 @@ export class NuxtProjectContext {
   async layers(): Promise<LayerInfo[]> {
     if (this.layersCache) return this.layersCache;
     const config = await this.config();
+    if (config.layers) {
+      this.layersCache = await layersFromResolved(config.layers);
+      return this.layersCache;
+    }
     const ext = config.value['extends'];
     const entries = Array.isArray(ext) ? ext.filter((e): e is string => typeof e === 'string') : [];
     this.layersCache = await resolveLayers(this.root, entries);
