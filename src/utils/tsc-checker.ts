@@ -16,7 +16,7 @@ const CHECK_TIMEOUT_MS = 120_000;
 export function parseTscOutput(output: string): TscDiagnostic[] {
   const diagnostics: TscDiagnostic[] = [];
   for (const line of output.split('\n')) {
-    const m = line.match(/^([^(]+)\((\d+),(\d+)\):\s*(error|warning)\s+TS(\d+):\s+(.+)$/);
+    const m = line.match(/^([^(]+)\((\d+),(\d+)\):\s*(error|warning)\s+TS(\d+): (.+)$/);
     if (!m) continue;
     diagnostics.push({
       file: m[1]!.trim() || undefined,

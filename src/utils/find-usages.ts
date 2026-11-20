@@ -58,10 +58,6 @@ interface UsageIndex {
 
 const EXCLUDED_DIRS = ['pages/', 'layouts/', 'plugins/'];
 
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function kebabCase(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
@@ -155,7 +151,7 @@ interface Reference {
 }
 
 function importRefs(line: string, importFileRel: string, index: UsageIndex): Reference[] {
-  const match = line.match(/import\s+([\s\S]+?)\s+from\s+['"]([^'"]+)['"]/);
+  const match = line.match(/^import (.+) from ['"]([^'"]+)['"]/);
   if (!match) return [];
 
   const bindings = match[1]!;
@@ -176,7 +172,7 @@ function importRefs(line: string, importFileRel: string, index: UsageIndex): Ref
   return refs;
 }
 
-const TAG_RE = /<\s*\/?\s*([A-Za-z][\w-]*)/g;
+const TAG_RE = /<\/?\s*([A-Za-z][\w-]*)/g;
 const IDENT_RE = /[A-Za-z_$][\w$]*/g;
 
 function tagRefs(line: string, index: UsageIndex): Reference[] {
@@ -222,7 +218,7 @@ function lineReferences(line: string, importFileRel: string, index: UsageIndex):
 function resolveTarget(target: string, candidates: Candidate[]): Candidate | null {
   const trimmed = target.trim();
   const looksLikeFile =
-    /\.(vue|ts|js|mts|mjs)$/.test(trimmed) ||
+    /\.(?:vue|ts|js|mts|mjs)$/.test(trimmed) ||
     trimmed.includes('components/') ||
     trimmed.includes('composables/') ||
     trimmed.includes('utils/') ||

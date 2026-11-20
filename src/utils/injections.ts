@@ -97,7 +97,6 @@ export interface ExplainInjectionsResult {
 }
 
 const FRAMEWORK_INJECTIONS = new Set(['$nuxt', '$route', '$router', '$config']);
-const SCRIPT_EXT = /\.(ts|js|mts|mjs)$/;
 const VUE_EXT = /\.vue$/;
 
 interface PluginTarget {
@@ -623,8 +622,8 @@ function identifierBefore(src: string, index: number): string | null {
 }
 
 function fileScope(rel: string): InjectionScope {
-  if (/\.client\.(ts|js|mts|mjs)$/.test(rel)) return 'client';
-  if (/\.server\.(ts|js|mts|mjs)$/.test(rel)) return 'server';
+  if (/\.client\.(?:ts|js|mts|mjs)$/.test(rel)) return 'client';
+  if (/\.server\.(?:ts|js|mts|mjs)$/.test(rel)) return 'server';
   return 'universal';
 }
 
@@ -834,7 +833,7 @@ function scanPluginFile(content: string, target: PluginTarget, sink: ProviderSin
 
 function scriptRanges(content: string): SourceRange[] {
   const ranges: SourceRange[] = [];
-  const re = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/g;
+  const re = /<script\b[^>]*>[\s\S]*?<\/script\s*>/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(content))) {
     ranges.push({ start: match.index, end: match.index + match[0].length });

@@ -4,7 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CLI_VERSION, parseCliArgs, printHelp } from "./cli.js";
 import { setupServer } from "./server.js";
 
-async function main() {
+async function main(): Promise<void> {
   let parsed;
   try {
     parsed = parseCliArgs(process.argv);

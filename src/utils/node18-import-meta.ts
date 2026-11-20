@@ -13,7 +13,6 @@
  * isolated module.
  */
 import { register } from 'node:module';
-import { pathToFileURL } from 'node:url';
 
 export const NODE18_IMPORT_META_LOADER_SOURCE = `
 import * as __mcpNodeUtilCheck from 'node:util';

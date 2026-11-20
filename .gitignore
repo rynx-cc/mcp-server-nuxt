@@ -12,4 +12,5 @@ dist/
 !tests/fixtures/**/.env
 .cursor/
 tests/fixtures/**/package-lock.json
+tests/fixtures/**/pnpm-lock.yaml
 tests/fixtures/large-components/components/

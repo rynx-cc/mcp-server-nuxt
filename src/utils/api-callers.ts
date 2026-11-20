@@ -203,7 +203,7 @@ export function extractMethod(src: string, from: number, close: number): string 
   return match?.[1]!.toUpperCase();
 }
 
-const CALL_RE = /\b(useFetch|useLazyFetch|useAsyncData|useLazyAsyncData)\b|\$fetch\b/g;
+const CALL_RE = /\b(?:useFetch|useLazyFetch|useAsyncData|useLazyAsyncData)\b|\$fetch\b/g;
 
 export function findInnerFetch(
   src: string,
@@ -325,7 +325,7 @@ export function resolveApiTarget(
   // A concrete URL also starts with `/`, so don't treat bare absolute-looking
   // paths as files — require a handler extension or the `server/` directory.
   const looksLikeFile =
-    /\.(ts|js|mts|mjs)$/.test(trimmed) || trimmed.includes('server/');
+    /\.(?:ts|js|mts|mjs)$/.test(trimmed) || trimmed.includes('server/');
 
   if (looksLikeFile) {
     const normalized = trimmed.replace(/\\/g, '/');

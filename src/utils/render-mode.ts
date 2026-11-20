@@ -218,7 +218,7 @@ export function parseJsLiteral(input: string): { value: unknown; unresolved: str
     if (raw === 'false') return false;
     if (raw === 'null') return null;
     if (raw === 'undefined') return undefined;
-    if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(raw)) return Number(raw);
+    if (/^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(raw)) return Number(raw);
     return rawMarker(raw);
   }
 
@@ -373,7 +373,7 @@ function splitTopLevel(body: string): string[] {
 
 export function findTopLevelValue(body: string, key: string): string | undefined {
   for (const part of splitTopLevel(body)) {
-    const match = part.match(/^\s*["']?([\w$.-]+)["']?\s*:\s*([\s\S]*)$/);
+    const match = part.match(/^\s*["']?([\w$.-]+)["']?\s*:([\s\S]*)$/);
     if (match && match[1] === key) return match[2]!.trim();
   }
   return undefined;
