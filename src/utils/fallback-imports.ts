@@ -2,8 +2,7 @@
  * Fallback auto-imports registry when Nuxt types cannot be generated
  * (no local `nuxt` install / kit failure).
  */
-import type { AutoImportInfo } from '../types.js';
-import type { ComponentInfo, ComposableInfo } from '../types.js';
+import type { AutoImportInfo, ComponentInfo, ComposableInfo } from '../types.js';
 
 /** Common Nuxt / Vue auto-imports agents expect even without `.nuxt/imports.d.ts`. */
 export const BUILTIN_NUXT_IMPORTS: ReadonlyArray<{ name: string; source: string; kind: AutoImportInfo['kind'] }> = [

@@ -190,7 +190,7 @@ export async function layersFromResolved(resolved: ResolvedLayer[]): Promise<Lay
     });
   }
 
-  const realDir = (dir: string) => fs.realpath(dir).catch(() => dir);
+  const realDir = async (dir: string): Promise<string> => fs.realpath(dir).catch(() => dir);
   const byCwd = new Map<string, LayerInfo>();
   for (const layer of result) byCwd.set(await realDir(layer.cwd), layer);
   for (const layer of result) {

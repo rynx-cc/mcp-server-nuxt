@@ -1,30 +1,22 @@
 {
   "name": "mcp-server-nuxt",
-  "version": "0.9.1",
-  "description": "MCP server for Nuxt projects — exposes routes, components, config, and more to AI agents",
   "type": "module",
-  "bin": {
-    "mcp-server-nuxt": "dist/index.js"
+  "version": "0.9.1",
+  "packageManager": "pnpm@12.8.1",
+  "description": "MCP server for Nuxt projects — exposes routes, components, config, and more to AI agents",
+  "author": "rynx-cc",
+  "license": "MIT",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/rynx-cc"
   },
-  "main": "dist/index.js",
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE",
-    "CHANGELOG.md"
-  ],
-  "engines": {
-    "node": ">=18.0.0"
+  "homepage": "https://github.com/rynx-cc/mcp-server-nuxt#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rynx-cc/mcp-server-nuxt.git"
   },
-  "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean --external @nuxt/kit",
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "tsx scripts/e2e-client.ts",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  "bugs": {
+    "url": "https://github.com/rynx-cc/mcp-server-nuxt/issues"
   },
   "keywords": [
     "mcp",
@@ -36,20 +28,31 @@
     "cursor",
     "nitro"
   ],
-  "license": "MIT",
-  "funding": {
-    "type": "github",
-    "url": "https://github.com/sponsors/rynx-cc"
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-server-nuxt": "dist/index.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/rynx-cc/mcp-server-nuxt.git"
+  "files": [
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
   },
-  "homepage": "https://github.com/rynx-cc/mcp-server-nuxt#readme",
-  "bugs": {
-    "url": "https://github.com/rynx-cc/mcp-server-nuxt/issues"
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --external @nuxt/kit",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "tsx scripts/e2e-client.ts",
+    "prepublishOnly": "pnpm run typecheck && pnpm test && pnpm run build"
   },
-  "author": "rynx-cc",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "fast-glob": "^3.3.0",
@@ -59,7 +62,9 @@
     "@nuxt/kit": "^3.14.0"
   },
   "devDependencies": {
+    "@antfu/eslint-config": "^10.0.0",
     "@types/node": "^22.0.0",
+    "eslint": "^10.15.0",
     "tsup": "^8.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.5.0",

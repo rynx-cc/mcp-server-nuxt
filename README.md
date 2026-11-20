@@ -234,9 +234,18 @@ VS Code uses `servers` instead of `mcpServers`. In `.vscode/mcp.json`:
 <summary><b>CLI and other package managers</b></summary>
 
 ```bash
+# one-shot
 npx -y mcp-server-nuxt@latest /absolute/path/to/app
 pnpm dlx mcp-server-nuxt@latest /absolute/path/to/app
 bunx mcp-server-nuxt@latest /absolute/path/to/app
+
+# install as a project dependency
+npm install -D mcp-server-nuxt
+pnpm add -D mcp-server-nuxt
+
+# optional: @antfu/ni (if you already use it — not required by this package)
+nlx mcp-server-nuxt /absolute/path/to/app
+ni -D mcp-server-nuxt
 
 npm install -g mcp-server-nuxt
 mcp-server-nuxt --help
@@ -261,8 +270,8 @@ Pull requests are welcome.
 ```bash
 git clone https://github.com/rynx-cc/mcp-server-nuxt.git
 cd mcp-server-nuxt
-npm install
-npm run typecheck && npm test && npm run build
+pnpm install
+pnpm run typecheck && pnpm test && pnpm run build
 ```
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`).

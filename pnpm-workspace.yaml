@@ -1,0 +1,4 @@
+# pnpm 12 project settings (replaces the old package.json "pnpm" field).
+# Allow esbuild postinstall so tsup/vitest can run.
+allowBuilds:
+  esbuild: true

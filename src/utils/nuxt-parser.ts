@@ -9,7 +9,6 @@ import fg from 'fast-glob';
 import { resolveSourceDirs } from './source-dirs.js';
 import type {
   ComposableInfo,
-  ComponentInfo,
   ComponentProp,
   ModuleInfo,
   RouteInfo,
@@ -272,7 +271,7 @@ export function extractPageMeta(content: string): {
       if (layoutMatch) layout = layoutMatch[1];
     }
 
-    const kv = line.match(/^\s*([\w$]+)\s*:\s*([\s\S]*?)\s*(?:,|$)/);
+    const kv = line.match(/^\s*([\w$]+):([^,]*)(?:,|$)/);
     if (kv && !['layout', 'middleware'].includes(kv[1]!)) {
       meta[kv[1]!] = kv[2]!.trim();
     }
@@ -402,7 +401,7 @@ function parseProps(content: string): ComponentProp[] {
   if (typeMatch) {
     const body = typeMatch[1]!;
     for (const entry of splitTopLevelComma(body)) {
-      const m = entry.trim().match(/^([\w$]+)(\??)\s*:\s*([\s\S]*)$/);
+      const m = entry.trim().match(/^([\w$]+)(\??)\s*:(.*)$/);
       if (!m) continue;
       props.push({
         name: m[1]!,
@@ -418,7 +417,7 @@ function parseProps(content: string): ComponentProp[] {
   if (runtimeMatch) {
     const body = runtimeMatch[1]!;
     for (const entry of splitTopLevelComma(body)) {
-      const m = entry.trim().match(/^([\w$]+)\s*:\s*([\s\S]*)$/);
+      const m = entry.trim().match(/^([\w$]+)\s*:(.*)$/);
       if (!m) continue;
       const name = m[1]!;
       const value = m[2]!.trim();
@@ -540,7 +539,7 @@ export function parseNamedExports(content: string): NamedExport[] {
   };
 
   for (const match of content.matchAll(
-    /export\s+(?:async\s+)?function\s+([\w$]+)\s*\(([^)]*)\)\s*(?::\s*([^{=]+))?\s*\{/g,
+    /export\s+(?:async\s+)?function\s+([\w$]+)\s*\(([^)]*)\)\s*(?::([^{=]+))?\{/g,
   )) {
     push({
       name: match[1]!,

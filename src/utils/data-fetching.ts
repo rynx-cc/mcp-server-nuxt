@@ -11,7 +11,6 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { RouteInfo } from '../types.js';
 import {
-  extractFirstArg,
   extractMethod,
   findInnerFetch,
   findMatchingParen,
@@ -498,7 +497,7 @@ export async function explainDataFetching(
   } else {
     const abs = path.resolve(root, trimmed);
     if (await isFile(abs)) {
-      files = /\.(vue|ts|js|mts|mjs)$/.test(abs) ? [abs] : [];
+      files = /\.(?:vue|ts|js|mts|mjs)$/.test(abs) ? [abs] : [];
       target = { input: trimmed, kind: 'file', files: files.map((file) => relativePath(root, file)) };
       if (files.length === 0) notes.push(`"${trimmed}" is not a Vue/TS/JS source file.`);
     } else if (await exists(abs)) {

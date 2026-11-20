@@ -255,6 +255,7 @@ function getCachedDataParamCount(optionsRaw: string): number | null {
   if (match) return countParams(match[1]!);
   match = value.match(/^(?:async\s*)?([A-Za-z_$][\w$]*)\s*=>/);
   if (match) return 1;
+  // eslint-disable-next-line regexp/no-super-linear-backtracking -- keep Nuxt4 function-form param parsing; adjacent \s* is intentional
   match = value.match(/^(?:async\s*)?function\s*[A-Za-z_$]*\s*\(([^)]*)\)/);
   if (match) return countParams(match[1]!);
   return null;
@@ -620,7 +621,7 @@ async function sourceFindings(root: string, dirs: SourceDirs): Promise<Nuxt4Migr
           ruleId: 'shared-prerender-data',
           severity: 'warning',
           reason: 'Prerendered useAsyncData payloads are shared across pages in Nuxt 4; a dynamic page without an explicit key can reuse another route param\'s data.',
-          fix: 'Pass a key that includes the route param, e.g. useAsyncData(`post-${slug}`, () => $fetch(`/api/posts/${slug}`)).',
+          fix: 'Pass a key that includes the route param, e.g. useAsyncData(`post-$' + '{slug}`, () => $fetch(`/api/posts/$' + '{slug}`)).',
           guideSection: 'Shared Prerender Data',
         });
       }
@@ -658,7 +659,7 @@ async function sourceFindings(root: string, dirs: SourceDirs): Promise<Nuxt4Migr
       ...regexFindings(
         content,
         file,
-        /(?:\broute|\$route)\s*\.\s*meta\s*\.\s*(name|path)\b/g,
+        /(?:\broute|\$route)\s*\.\s*meta\s*\.\s*(?:name|path)\b/g,
         'route-meta-dedup',
         'warning',
         'Route name/path are no longer duplicated onto route.meta in Nuxt 4.',
@@ -686,7 +687,7 @@ async function sourceFindings(root: string, dirs: SourceDirs): Promise<Nuxt4Migr
       ...regexFindings(
         content,
         file,
-        /\brefresh\s*\(\s*\{\s*dedupe\s*:\s*(true|false)\b/g,
+        /\brefresh\s*\(\s*\{\s*dedupe\s*:\s*(?:true|false)\b/g,
         'dedupe-boolean',
         'warning',
         'Nuxt 4 removed the boolean aliases for `refresh({ dedupe })`.',

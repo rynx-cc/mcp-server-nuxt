@@ -196,7 +196,7 @@ export function parseConfigSource(source: string): Record<string, unknown> {
 
   const assignments = splitTopLevel(body);
   for (const assignment of assignments) {
-    const match = assignment.match(/^[\s,;]*["']?([\w$.-]+)["']?\s*[:=]\s*([\s\S]*)$/);
+    const match = assignment.match(/^[\s,;]*["']?([\w$.-]+)["']?\s*[:=]([\s\S]*)$/);
     if (!match) continue;
     const key = match[1]!;
     const rawValue = match[2]!.trim().replace(/[,;]\s*$/, '');
@@ -227,7 +227,6 @@ export function extractConfigBody(source: string): string | null {
 
   for (let i = startIndex; i < source.length; i++) {
     const ch = source[i]!;
-    const prev = i > 0 ? source[i - 1]! : '';
 
     if (inComment === 'line') {
       if (ch === '\n') inComment = null;
@@ -474,7 +473,7 @@ interface TopLevelAssignment {
 function findTopLevelAssignment(body: string, key: string): TopLevelAssignment | null {
   const assignments = splitTopLevel(body);
   for (const assignment of assignments) {
-    const match = assignment.match(/^([\s]*)(["']?)([\w$.-]+)\2\s*:\s*([\s\S]*)$/);
+    const match = assignment.match(/^([\s]*)(["']?)([\w$.-]+)\2\s*:([\s\S]*)$/);
     if (!match) continue;
     if (match[3] === key) {
       return { fullMatch: assignment.trim(), value: match[4]!.trim() };

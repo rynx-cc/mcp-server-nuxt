@@ -35,14 +35,14 @@ describe('extractFetchCalls', () => {
     const calls = extractFetchCalls(
       [
         "const a = useFetch('/api/hello')",
-        'const b = useFetch(`/api/users/${id}`, { method: "POST" })',
+        'const b = useFetch(`/api/users/$' + '{id}`, { method: "POST" })',
         "const c = $fetch('/api/hello')",
         "const d = await useAsyncData('x', () => $fetch('/api/hello'))",
       ].join('\n'),
     );
     expect(calls.map((c) => c.composable)).toEqual(['useFetch', 'useFetch', '$fetch', 'useAsyncData']);
     expect(calls[0]!.url).toBe('/api/hello');
-    expect(calls[1]!.url).toBe('/api/users/${id}');
+    expect(calls[1]!.url).toBe('/api/users/$' + '{id}');
     expect(calls[1]!.template).toBe(true);
     expect(calls[1]!.method).toBe('POST');
     expect(calls[3]!.url).toBe('/api/hello');
@@ -77,7 +77,7 @@ describe('find_api_callers (fixture)', () => {
     const result = await findApiCallers(fixture, '/api/users/42', await listServerRoutes(fixture));
     expect(result.target.pattern).toBe('/api/users/:id');
     expect(result.callers.length).toBe(2);
-    expect(result.callers.every((c) => c.url === '/api/users/${id}')).toBe(true);
+    expect(result.callers.every((c) => c.url === '/api/users/$' + '{id}')).toBe(true);
   });
 
   it('MCP tool find_api_callers returns JSON', async () => {

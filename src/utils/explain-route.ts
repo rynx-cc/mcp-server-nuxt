@@ -142,7 +142,7 @@ export function routeNameFromFile(relFile: string): string {
 }
 
 const DATA_FETCH_RE =
-  /\b(useFetch|useLazyFetch|useAsyncData|useLazyAsyncData|\$fetch)\s*(?:<[^>]*>)?\s*\(\s*(['"`])([^'"`]+)\2/g;
+  /\b(useFetch|useLazyFetch|useAsyncData|useLazyAsyncData|\$fetch)(?:\s*<[^>]*>)?\s*\(\s*(['"`])([^'"`]+)\2/g;
 
 export function findDataFetching(content: string, file: string): ExplainRouteDataFetch[] {
   const results: ExplainRouteDataFetch[] = [];

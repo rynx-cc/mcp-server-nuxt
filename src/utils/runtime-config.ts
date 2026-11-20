@@ -257,6 +257,7 @@ function parseDestructurePattern(pattern: string, allPublic: boolean): Destructu
       continue;
     }
 
+    // eslint-disable-next-line regexp/no-super-linear-backtracking -- adjacent \s* needed for optional `public` / `public: alias` destructure forms
     const alias = part.match(/^public\s*(?::\s*([A-Za-z_$][\w$]*))?\s*$/);
     if (alias) {
       publicAliases.push(alias[1] ?? 'public');
@@ -374,8 +375,8 @@ function scanAliases(content: string, aliases: AliasBinding[]): BaseScan['access
 
 function isClientSideFile(rel: string): boolean {
   const normalized = rel.replace(/\\/g, '/');
-  if (/\.server\.(ts|js|mts|mjs|vue)$/.test(normalized)) return false;
-  if (/\.client\.(ts|js|mts|mjs|vue)$/.test(normalized)) return true;
+  if (/\.server\.(?:ts|js|mts|mjs|vue)$/.test(normalized)) return false;
+  if (/\.client\.(?:ts|js|mts|mjs|vue)$/.test(normalized)) return true;
   return /\.vue$/.test(normalized);
 }
 

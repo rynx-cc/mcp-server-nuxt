@@ -31,13 +31,13 @@ export interface LineRange {
   end: number;
 }
 
-const BROWSER_GLOBAL_RE = /\b(window|document|localStorage|sessionStorage|navigator|location)\b/;
-const RANDOM_TIME_RE = /\b(Date\.now\s*\(|new\s+Date\s*\(|Math\.random\s*\(|crypto\.randomUUID\s*\(|randomUUID\s*\()/;
+const BROWSER_GLOBAL_RE = /\b(?:window|document|localStorage|sessionStorage|navigator|location)\b/;
+const RANDOM_TIME_RE = /\b(?:Date\.now\s*\(|new\s+Date\s*\(|Math\.random\s*\(|crypto\.randomUUID\s*\(|randomUUID\s*\()/;
 const SHARED_STATE_RE =
-  /^\s*(?:export\s+)?(const|let|var)\s+([\w$]+)\s*=\s*(ref|reactive)\s*(?:<[^>]*>)?\s*\(/;
+  /^\s*(?:export\s+)?(?:const|let|var)\s+[\w$]+\s*=\s*(?:ref|reactive)\s*(?:<[^>]*>\s*)?\(/;
 const CONTROL_KEYWORDS = new Set(['if', 'for', 'while', 'switch', 'catch', 'with']);
-const HOOK_RE = /\b(onMounted|onBeforeMount)\b/g;
-const COMPUTED_RE = /\bcomputed\b\s*\(/g;
+const HOOK_RE = /\b(?:onMounted|onBeforeMount)\b/g;
+const COMPUTED_RE = /\bcomputed\s*\(/g;
 
 function lineOf(src: string, index: number): number {
   let line = 1;
@@ -113,7 +113,7 @@ function clientGuardRanges(content: string): LineRange[] {
   const ranges: LineRange[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
-    if (!/\b(import\.meta\.client|process\.client|typeof\s+window\b)/.test(line)) continue;
+    if (!/\b(?:import\.meta\.client|process\.client|typeof\s+window\b)/.test(line)) continue;
     const start = i + 1;
     let braceDepth = 0;
     let foundOpen = false;
@@ -140,7 +140,7 @@ function clientGuardRanges(content: string): LineRange[] {
 
 function clientOnlyRanges(content: string): LineRange[] {
   const ranges: LineRange[] = [];
-  const re = /<ClientOnly\b[^>]*>([\s\S]*?)<\/ClientOnly\s*>/g;
+  const re = /<ClientOnly\b[^>]*>[\s\S]*?<\/ClientOnly\s*>/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(content))) {
     ranges.push({
@@ -153,7 +153,7 @@ function clientOnlyRanges(content: string): LineRange[] {
 
 export function scriptRanges(content: string): LineRange[] {
   const ranges: LineRange[] = [];
-  const re = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/g;
+  const re = /<script\b[^>]*>[\s\S]*?<\/script\s*>/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(content))) {
     ranges.push({ start: lineOf(content, match.index), end: lineOf(content, match.index + match[0].length) });
@@ -232,7 +232,7 @@ function isFunctionBrace(content: string, braceIndex: number): boolean {
  */
 export function functionDepthByLine(content: string): number[] {
   const lineCount = content.split('\n').length;
-  const depths = new Array<number>(lineCount).fill(0);
+  const depths = Array.from({ length: lineCount }).fill(0) as number[];
   let line = 0;
   let depth = 0;
   const stack: boolean[] = [];
@@ -304,7 +304,7 @@ function computedRanges(content: string): LineRange[] {
 }
 
 function isClientOnlyFile(file: string): boolean {
-  return /\.client\.(vue|ts|js|mts|mjs)$/.test(file);
+  return /\.client\.(?:vue|ts|js|mts|mjs)$/.test(file);
 }
 
 function isComposableFile(rel: string): boolean {
@@ -456,7 +456,7 @@ async function filesForTarget(root: string, target?: string): Promise<string[]> 
   }
   const abs = path.resolve(root, target);
   if (await isFile(abs)) {
-    return /\.(vue|ts|js|mts|mjs)$/.test(abs) ? [abs] : [];
+    return /\.(?:vue|ts|js|mts|mjs)$/.test(abs) ? [abs] : [];
   }
   if (await exists(abs)) {
     return findFiles(abs, ['**/*.{vue,ts,js,mts,mjs}'], ['**/*.d.ts', '**/*.d.mts', '**/*.d.cts']);
